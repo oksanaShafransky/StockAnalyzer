@@ -6,6 +6,7 @@ from sklearn.linear_model import LinearRegression
 import numpy as np
 import logging as logger
 
+big_tickers = ['MSFT','AAPL','NVDA','GOOG','GOOGL','AMZN','META','BRK/A','BRK/B','TSM','LLY','AVGO','NVO','TSLA','JPM','WMT','V','UNH','XOM','MA','PG','ASML','JNJ','COST','ORCL']
 url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
 def get_top_tickers(num:int=10):
     # Use pandas to read the table directly from the URL
@@ -75,7 +76,7 @@ def get_all_data(tickers):
 
 if __name__ == '__main__':
     try:
-        tickers = get_top_tickers()
+        tickers = big_tickers #get_top_tickers()
         all_data_df = get_all_data(tickers)
         daily_returns = all_data_df.pct_change()
         # Calculate cumulative returns over the period
