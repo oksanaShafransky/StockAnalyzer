@@ -233,33 +233,46 @@ def plot_stock_data_last_5_years(stock_data, ticker, window=MOVING_AVG1):
     stock_data_5_years = stock_data[start_date:end_date]
     #stock_data_5_years['Moving_Avg_60'] = stock_data_5_years['Close'].rolling(window=60).mean()
 
-    plt.figure(figsize=(14, 7))
+    #plt.figure(figsize=(14, 7))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
 
-    plt.plot(stock_data_5_years['Close'], label='Close Price', color='blue')
-    plt.plot(stock_data['Close_Exp'], label='Exp Close Price', color='red')
+    ax1.plot(stock_data_5_years['Close'], label='Close Price', color='blue')
+    ax1.plot(stock_data['Close_Exp'], label='Exp Close Price', color='red')
 
-    plt.plot(stock_data_5_years[f'Moving_Avg_{MOVING_AVG1}'], label=f'{MOVING_AVG1}-Day Moving Average', color='orange')
-    plt.plot(stock_data_5_years[f'Moving_Avg_{MOVING_AVG2}'], label=f'{MOVING_AVG2}-Day Moving Average', color='green')
-    plt.scatter(stock_data_5_years[stock_data_5_years['Filtered_BUY']].index, stock_data_5_years[stock_data_5_years['Filtered_BUY']]['Close'], color='green', marker='^', label='BUY', s=100)
-    plt.scatter(stock_data_5_years[stock_data_5_years['Filtered_SELL']].index, stock_data_5_years[stock_data_5_years['Filtered_SELL']]['Close'], color='red', marker='v', label='SELL', s=100)
+    ax1.plot(stock_data_5_years[f'Moving_Avg_{MOVING_AVG1}'], label=f'{MOVING_AVG1}-Day Moving Average', color='orange')
+    ax1.plot(stock_data_5_years[f'Moving_Avg_{MOVING_AVG2}'], label=f'{MOVING_AVG2}-Day Moving Average', color='green')
+    ax1.scatter(stock_data_5_years[stock_data_5_years['Filtered_BUY']].index, stock_data_5_years[stock_data_5_years['Filtered_BUY']]['Close'], color='green', marker='^', label='BUY', s=100)
+    ax1.scatter(stock_data_5_years[stock_data_5_years['Filtered_SELL']].index, stock_data_5_years[stock_data_5_years['Filtered_SELL']]['Close'], color='red', marker='v', label='SELL', s=100)
 
     # Plot positive trend change points
     positive_trend_changes = stock_data_5_years[(stock_data_5_years[f'Trend_Type_{MOVING_AVG1}'] == 'Positive') & (stock_data_5_years[f'Trend_Change_{MOVING_AVG1}'] == 1)]
     negative_trend_changes = stock_data_5_years[(stock_data_5_years[f'Trend_Type_{MOVING_AVG1}'] == 'Negative') & (stock_data_5_years[f'Trend_Change_{MOVING_AVG1}'] == 1)]
     neutral_trend_changes = stock_data_5_years[(stock_data_5_years[f'Trend_Type_{MOVING_AVG1}'] == 'Neutral') & (stock_data_5_years[f'Trend_Change_{MOVING_AVG1}'] == 1)]
 
-    plt.scatter(positive_trend_changes.index, positive_trend_changes[f'Moving_Avg_{MOVING_AVG1}'], color='purple', marker='x', label='Positive Trend Change', s=100)
-    plt.scatter(negative_trend_changes.index, negative_trend_changes[f'Moving_Avg_{MOVING_AVG1}'], color='brown', marker='o', label='Negative Trend Change', s=100)
-    plt.scatter(neutral_trend_changes.index, neutral_trend_changes[f'Moving_Avg_{MOVING_AVG1}'], color='grey', marker='s', label='Neutral Trend Change', s=100)
+    ax1.scatter(positive_trend_changes.index, positive_trend_changes[f'Moving_Avg_{MOVING_AVG1}'], color='purple', marker='x', label='Positive Trend Change', s=100)
+    ax1.scatter(negative_trend_changes.index, negative_trend_changes[f'Moving_Avg_{MOVING_AVG1}'], color='brown', marker='o', label='Negative Trend Change', s=100)
+    ax1.scatter(neutral_trend_changes.index, neutral_trend_changes[f'Moving_Avg_{MOVING_AVG1}'], color='grey', marker='s', label='Neutral Trend Change', s=100)
 
-    plt.grid(True)
+    ax1.grid(True)
 
-    plt.title(f'{ticker} Stock Price, Moving Average, and Buy/Sell Signals (Last 5 Years)')
-    plt.xlabel('Date')
-    plt.ylabel('Price')
+    ax1.set_title(f'{ticker} Stock Price, Moving Average, and Buy/Sell Signals (Last 5 Years)')
+    ax1.set_xlabel('Date')
+    ax1.set_ylabel('Price')
+    ax1.legend()
 
-    plt.legend()
-    plt.show(block=True)
+    stock_data['Distance'] = stock_data['Close'] - stock_data[f'Moving_Avg_{MOVING_AVG1}']
+    stock_data['Distance_Per'] = (stock_data['Distance'] * 100)/stock_data[f'Moving_Avg_{MOVING_AVG1}']
+    # Plot the additional data on the second subplot
+    ax2.plot(stock_data.index, stock_data['Distance_Per'], label='Distance_Per', color='purple')
+    ax2.set_title(f'{ticker} Percentage Difference')
+    ax2.set_xlabel('Date')
+    ax2.set_ylabel('Percentage Difference')
+    ax2.legend()
+    ax2.grid(True)
+
+
+    plt.tight_layout()
+    plt.show()
 
 
 # Example usage
