@@ -67,20 +67,33 @@ def identify_signals(stock_data, window=MOVING_AVG1, neutral_threshold=0.0005):
     stock_data[f'Trend_Change_{MOVING_AVG2}'] = stock_data[f'Trend_Type_{MOVING_AVG2}'].ne(stock_data[f'Trend_Type_{MOVING_AVG2}'].shift()).astype(int)
     stock_data['Close_Exp'] = stock_data['Close'].ewm(span=3, adjust=True).mean()
 
+
+    stock_data['Distance'] = stock_data['Close'] - stock_data[f'Moving_Avg_{MOVING_AVG1}']
+    stock_data['Distance_Per'] = (stock_data['Distance'] * 100)/stock_data[f'Moving_Avg_{MOVING_AVG1}']
+    stock_data['Distance_MA'] = stock_data['Distance_Per'].rolling(window=MOVING_AVG1).mean()
+    stock_data['Distance_STD_PER'] = stock_data['Distance_Per'].rolling(window=MOVING_AVG1).std()
+    stock_data['Distance_STD_HIGH'] = stock_data['Distance_MA'] + stock_data['Distance_STD_PER']
+    stock_data['Distance_STD_LOW'] = stock_data['Distance_MA'] - stock_data['Distance_STD_PER']
+    stock_data['BUY'] = ((stock_data['Close'] > stock_data[f'Moving_Avg_{MOVING_AVG1}'])
+        & (stock_data['Distance_Per']<stock_data['Distance_MA']))
+    stock_data['SELL'] = ((stock_data['Distance_Per'] > stock_data['Distance_MA'])
+        & (stock_data['Distance_STD_HIGH']>stock_data['Distance_MA']))
+
+
     # Identify buy signals: positive trend change and price above moving average
     #stock_data['BUY'] = (((stock_data[f'Trend_Type_{MOVING_AVG1}'] == 'Positive') & (stock_data[f'Trend_Change_{MOVING_AVG1}'] == 1))
     #                     & (stock_data['Close'] >= stock_data[f'Moving_Avg_{MOVING_AVG1}']))
     # stock_data['SELL'] = (stock_data['Trend_Change'] == 1) & (
     #             stock_data['Close'] < stock_data['Moving_Avg'])
     #stock_data['BUY'] =  ((stock_data[f'Trend_Type_{MOVING_AVG1}'] == 'Positive') & (stock_data[f'Trend_Change_{MOVING_AVG1}'] == 1) & stock_data['Close'] > stock_data[f'Moving_Avg_{MOVING_AVG1}'])
-    stock_data['BUY'] = ((stock_data['Close'] >= stock_data[f'Moving_Avg_{MOVING_AVG1}'])
-                         & (stock_data['Close_Exp'] > stock_data['Close']  )
-                         & (stock_data['Pct_Diff_2_days']>0)
-                         & (stock_data['SMA_Diff_3_days']>0)
-                         & (stock_data['SMA_Diff_10_days']>0))
+    # stock_data['BUY'] = ((stock_data['Close'] >= stock_data[f'Moving_Avg_{MOVING_AVG1}'])
+    #                      & (stock_data['Close_Exp'] > stock_data['Close']  )
+    #                      & (stock_data['Pct_Diff_2_days']>0)
+    #                      & (stock_data['SMA_Diff_3_days']>0)
+    #                      & (stock_data['SMA_Diff_10_days']>0))
 
                         #& ((stock_data[f'Trend_Type_{MOVING_AVG1}'] == 'Positive') & (stock_data[f'Trend_Change_{MOVING_AVG1}'] == 1)))
-    stock_data['SELL'] = (stock_data['Close'] <= stock_data[f'Moving_Avg_{MOVING_AVG2}'])
+    #stock_data['SELL'] = (stock_data['Close'] <= stock_data[f'Moving_Avg_{MOVING_AVG2}'])
                           #& ((stock_data[f'Trend_Type_{MOVING_AVG2}'] == 'Negative') & (stock_data[f'Trend_Change_{MOVING_AVG2}'] == 1)))
                           #| (stock_data['Close'] <= stock_data[f'Moving_Avg_{MOVING_AVG2}']))
 
@@ -237,7 +250,7 @@ def plot_stock_data_last_5_years(stock_data, ticker, window=MOVING_AVG1):
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
 
     ax1.plot(stock_data_5_years['Close'], label='Close Price', color='blue')
-    ax1.plot(stock_data['Close_Exp'], label='Exp Close Price', color='red')
+    ax1.plot(stock_data_5_years['Close_Exp'], label='Exp Close Price', color='red')
 
     ax1.plot(stock_data_5_years[f'Moving_Avg_{MOVING_AVG1}'], label=f'{MOVING_AVG1}-Day Moving Average', color='orange')
     ax1.plot(stock_data_5_years[f'Moving_Avg_{MOVING_AVG2}'], label=f'{MOVING_AVG2}-Day Moving Average', color='green')
@@ -260,10 +273,14 @@ def plot_stock_data_last_5_years(stock_data, ticker, window=MOVING_AVG1):
     ax1.set_ylabel('Price')
     ax1.legend()
 
-    stock_data['Distance'] = stock_data['Close'] - stock_data[f'Moving_Avg_{MOVING_AVG1}']
-    stock_data['Distance_Per'] = (stock_data['Distance'] * 100)/stock_data[f'Moving_Avg_{MOVING_AVG1}']
     # Plot the additional data on the second subplot
-    ax2.plot(stock_data.index, stock_data['Distance_Per'], label='Distance_Per', color='purple')
+    ax2.plot(stock_data_5_years.index, stock_data_5_years['Distance_Per'], label='Distance_Per', color='purple')
+    ax2.plot(stock_data_5_years.index, stock_data_5_years['Distance_STD_HIGH'], label='Distance_STD_HIGH', color='red')
+    ax2.plot(stock_data_5_years.index, stock_data_5_years['Distance_STD_LOW'], label='Distance_STD_LOW', color='blue')
+    ax2.plot(stock_data_5_years.index, stock_data_5_years['Distance_MA'], label='Distance_Per', color='green')
+    ax2.scatter(stock_data_5_years[stock_data_5_years['Filtered_BUY']].index, stock_data_5_years[stock_data_5_years['Filtered_BUY']]['Close'], color='green', marker='^', label='BUY', s=100)
+    ax2.scatter(stock_data_5_years[stock_data_5_years['Filtered_SELL']].index, stock_data_5_years[stock_data_5_years['Filtered_SELL']]['Close'], color='red', marker='v', label='SELL', s=100)
+
     ax2.set_title(f'{ticker} Percentage Difference')
     ax2.set_xlabel('Date')
     ax2.set_ylabel('Percentage Difference')
