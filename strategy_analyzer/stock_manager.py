@@ -21,18 +21,22 @@ class StockManager:
 
     def get_stocks_by_ticker(self, ticker_names:[], start_date=None, end_date=None)->[]:
         stocks = []
-        for ticker in ticker_names:
-            stock = yf.Ticker(ticker)
-            stock_data = stock.history(start=start_date, end=end_date)
-            stock_data.reset_index(inplace=True)
-            stock_info = stock.info
+        try:
+            for ticker in ticker_names:
+                stock = yf.Ticker(ticker)
+                stock_data = stock.history(start=start_date, end=end_date)
+                stock_data.reset_index(inplace=True)
+                stock_info = stock.info
 
-            stock_data['Date'] = pd.to_datetime(stock_data['Date'])
-            stock_data.set_index('Date', inplace=True)
-            stock_data_sliced = stock_data.loc[start_date:end_date] if start_date and end_date else stock_data
-            stock = Stock(yf.Ticker(ticker).info['shortName'], ticker, stock_data_sliced, stock_info)
-            stocks.append(stock)
-        return stocks
+                stock_data['Date'] = pd.to_datetime(stock_data['Date'])
+                stock_data.set_index('Date', inplace=True)
+                stock_data_sliced = stock_data.loc[start_date:end_date] if start_date and end_date else stock_data
+                stock = Stock(yf.Ticker(ticker).info['shortName'], ticker, stock_data_sliced, stock_info)
+                stocks.append(stock)
+            return stocks
+        except Exception as e:
+            print(f'Error on get_stocks_by_ticker: {e}')
+            raise Exception(e)
 
     def run_strategy(self, stocks:[], strategy:Strategy):
         for stock in stocks:
