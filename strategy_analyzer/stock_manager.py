@@ -85,3 +85,8 @@ class StockManager:
                 server.sendmail(sender_email, recipient_email, text)
         except Exception as e:
             print(f'Error on sending email {e}')
+
+    def calc_profit_for_stocks(self, stocks):
+        for stock in stocks:
+            stock_profit = stock.calculate_profit()
+            print(f'Profit for stock {stock.name}: {stock_profit}')
