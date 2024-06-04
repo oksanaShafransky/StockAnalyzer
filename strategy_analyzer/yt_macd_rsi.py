@@ -14,6 +14,13 @@ class YT_MACD_RSI_strategy(Strategy):
         self.window = window
         self.neutral_threshold = neutral_threshold
 
+    def normalize(self,series):
+        min_val = series.min()
+        max_val = series.max()
+        return 2 * (series - min_val) / (max_val - min_val) - 1
+
+
+
     def calc_buy_sell(self, stock:Stock):
         stock_data = stock.stock_data
 
@@ -21,6 +28,17 @@ class YT_MACD_RSI_strategy(Strategy):
         stock_data['MA_Diff'] = stock_data['Moving_Avg'].diff()
         stock_data['MA_Trend'] = np.where(stock_data['MA_Diff'] > 0, 1, -1)
         stock_data['Close_Exp'] = stock_data['Close'].ewm(span=3, adjust=True).mean()
+        stock_data['Descent'] = (stock_data['Moving_Avg']  - stock_data['Moving_Avg'] .shift(12))
+        # Normalize the Descent column
+        stock_data['Descent'] = self.normalize(stock_data['Descent'])
+        stock_data['Smoothed_Descent'] = stock_data['Descent'].rolling(window=5, center=True).mean()
+
+        # Calculate the derivative of the Smoothed_Descent column
+        stock_data['Descent_Derivative'] = stock_data['Smoothed_Descent'].diff()
+
+
+        #stock_data['Descent_Derivative'] = stock_data['Descent'].diff()
+        stock_data['Descent_Derivative'] = self.normalize(stock_data['Descent_Derivative'])
 
         # Identify trend type
         stock_data['Trend_Type'] = np.where(
@@ -37,6 +55,8 @@ class YT_MACD_RSI_strategy(Strategy):
                 {"kind": "ema", "length": 21},
                 {"kind": "ema", "length": 30},
                 {"kind": "ema", "length": 200},
+                {"kind": "rsi", "length": 10},
+                {"kind": "rsi", "length": 25},
                 {"kind": "bbands", "length": 20, "col_names": ("BBL", "BBM", "BBU","BBM1", "BBU1")},
                 {"kind": "macd", "fast": 12, "slow": 26, "signal":9, "col_names": ("MACD", "MACD_H", "MACD_S")}
             ]
@@ -58,21 +78,24 @@ class YT_MACD_RSI_strategy(Strategy):
 
         stock_data['BUY'] = (
                             # (stock_data['Trend_Type'] == 'Positive') &
-                             (stock_data['Close'] > stock_data['Moving_Avg'] )
-                              & (stock_data['Close'] > stock_data['EMA_200'] )
-                             #& (stock_data['Close'] > stock_data['EMA_30'] )
+                             (stock_data['Close'] > stock_data['Moving_Avg']*1.015 )
+                            & (stock_data['Descent'] > 0.2 )
+
+                             #& (stock_data['Close'] > stock_data['EMA_200']*1.015 )
                              & (stock_data['MACD'] < 0)
                              & (stock_data['MACD_S'] < 0)
                              & (stock_data['MACD_S'] < stock_data['MACD']))
 
         stock_data['SELL'] = ((stock_data['Close'] < stock_data['Moving_Avg']*0.985)
                               #| (stock_data['Close'] < stock_data['EMA_30'])
-                              |((stock_data['Distance_Per'] > stock_data['Distance_MA'])
-                              & (stock_data['Distance_STD_HIGH'] > stock_data['Distance_MA'])
-                              & (stock_data['MACD'] > 0)
-                              & (stock_data['MACD_S'] > 0)
-                              & (stock_data['MACD_S'] > stock_data['MACD']))
+                              #|((stock_data['Distance_Per'] > stock_data['Distance_MA'])
+                              #& (stock_data['Distance_STD_HIGH'] > stock_data['Distance_MA'])
+                              | (stock_data['RSI_10'] > 75)
+                              # |( (stock_data['MACD'] > 1)
+                              # & (stock_data['MACD_S'] > 1)
+                              # & (stock_data['MACD_S'] > stock_data['MACD']))
                               )
+
 
         buy_signals = []
         sell_signals = []
@@ -89,7 +112,7 @@ class YT_MACD_RSI_strategy(Strategy):
         stock_data['Filtered_SELL'] = stock_data.index.isin(sell_signals)
 
     def visualize(self, stock:Stock):
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+        fig, (ax1, ax2, ax3,ax4) = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
         ax1.plot(stock.stock_data['Close'], label='Close Price', color='blue')
         ax1.plot(stock.stock_data['Close_Exp'], label='Exp Close Price', color='red')
 
@@ -103,8 +126,8 @@ class YT_MACD_RSI_strategy(Strategy):
         ax1.plot(stock.stock_data['EMA_200'], label='Exponential 200 Day Moving Average',
                  color='cyan')
 
-        ax1.plot(stock.stock_data['EMA_30'], label='Exponential 30 Day Moving Average',
-                 color='olive')
+        # ax1.plot(stock.stock_data['EMA_30'], label='Exponential 30 Day Moving Average',
+        #          color='olive')
 
 
         ax1.scatter(stock.stock_data[stock.stock_data['Filtered_BUY']].index,
@@ -142,6 +165,14 @@ class YT_MACD_RSI_strategy(Strategy):
         ax2.plot(stock.stock_data.index, stock.stock_data["MACD_S"], label="Signal", color="red")
         ax2.set_ylabel("MACD")
 
+        ax3.plot(stock.stock_data.index, stock.stock_data["RSI_10"], label="RSI_10", color="blue")
+        ax3.plot(stock.stock_data.index, stock.stock_data["RSI_25"], label="RSI_25", color="red")
+        ax3.set_ylabel("RSI")
+
+        ax4.plot(stock.stock_data.index, stock.stock_data["Descent"], label="Descent", color="blue")
+        ax4.plot(stock.stock_data.index, stock.stock_data["Descent_Derivative"], label="Descent deriviative" , color="red")
+        ax4.set_ylabel("Descent")
+
         # ax2.plot(stock.stock_data.index, stock.stock_data['Distance_Per'], label='Distance_Per', color='purple')
         # ax2.plot(stock.stock_data.index, stock.stock_data['Distance_STD_HIGH'], label='Distance_STD_HIGH',
         #          color='red')
@@ -161,11 +192,25 @@ class YT_MACD_RSI_strategy(Strategy):
         #             0, color='red', marker='v',
         #             label='SELL', s=100)
 
-        ax2.set_title(f'{stock.ticker} Percentage Difference')
+        ax2.set_title(f'{stock.ticker} MACD')
         ax2.set_xlabel('Date')
-        ax2.set_ylabel('Percentage Difference')
+        ax2.set_ylabel('MACD')
         ax2.legend()
         ax2.grid(True)
+
+        ax3.set_title(f'{stock.ticker} RSI')
+        ax3.set_xlabel('Date')
+        ax3.set_ylabel('RSI')
+        ax3.legend()
+        ax3.grid(True)
+
+        plt.gca().xaxis.set_major_locator(plt.MaxNLocator(30))
+        ax4.set_title(f'{stock.ticker} Descent')
+        ax4.set_xlabel('Date')
+        ax4.set_ylabel('Descent')
+        ax4.legend()
+        ax4.grid(True)
+
         plt.tight_layout()
         image_path = f"../plots/{stock.ticker}_stock_plot.png"
         plt.savefig(image_path)
