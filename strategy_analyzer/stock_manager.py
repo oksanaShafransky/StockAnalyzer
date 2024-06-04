@@ -55,6 +55,66 @@ class StockManager:
     def calc_profit_for_stocks(self, stock):
         pass
 
+    def send_mail_with_trend_change_signals(self, stocks, current_date, to_email):
+        attachments = []
+        summary_table_data = []
+        for stock in stocks:
+            trend_change = stock.get_trend_change_signal(current_date)
+            if trend_change and trend_change != 'No Change':
+                print(f'trend_change type {trend_change}')
+                plot_filename = stock.plot_stock_data(current_date, trend_change)
+                attachments.append(plot_filename)
+                current_price = stock.stock_data.loc[current_date, 'Close']
+                summary_table_data.append([stock.ticker, stock.name, current_price, trend_change])
+
+        summary_table_df = pd.DataFrame(summary_table_data, columns=['Ticker', 'Name', 'Current Price', 'Trend Change'])
+        summary_table = summary_table_df.to_string(index=False)
+        if attachments:
+            subject = f'Stock Trend Change Notifications for {current_date}'
+            body = f'Trend change detected on {current_date}. Please find the attached plots for more details.'
+            self.send_email(subject, body, to_email, attachments, summary_table_df)
+        else:
+            print(f'No significant trend changes on {current_date} for any stocks.')
+
+    def send_email(self, subject, body, to_email, attachments, summary_table=None):
+        try:
+            sender_email = 'oksi.shafransky@gmail.com'
+            sender_password = 'llyd uexw iaec yitp'
+            msg = MIMEMultipart()
+            msg['From'] = sender_email
+            msg['To'] = ', '.join(to_email)
+            msg['Subject'] = subject
+
+            msg.attach(MIMEText(body, 'plain'))
+            summary_table_html = "<html><body><h2>Summary Table</h2><table border='1'>"
+            summary_table_html += "<tr>"
+            for col_name in summary_table.columns:
+                summary_table_html += f"<th>{col_name}</th>"
+            summary_table_html += "</tr>"
+            for index, row in summary_table.iterrows():
+                summary_table_html += "<tr>"
+                for value in row:
+                    summary_table_html += f"<td>{value}</td>"
+                summary_table_html += "</tr>"
+            summary_table_html += "</table></body></html>"
+            msg.attach(MIMEText(summary_table_html, 'html'))
+
+            for attachment in attachments:
+                with open(attachment, 'rb') as f:
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(f.read())
+                    encoders.encode_base64(part)
+                    part.add_header('Content-Disposition', f'attachment; filename={attachment}')
+                    msg.attach(part)
+            with smtplib.SMTP('smtp.gmail.com', 587) as server:
+                server.starttls()
+                server.login(sender_email, sender_password)
+                server.send_message(msg)
+            print(f'Email sent to {to_email} with attachments {attachments}')
+        except Exception as e:
+            print(f'Error on sending email {e}')
+
+
     def send_email_with_plots(self, stocks, strategy, recipient_email):
         try:
             # Email configuration
