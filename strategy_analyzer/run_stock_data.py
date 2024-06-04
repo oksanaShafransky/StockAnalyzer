@@ -18,5 +18,5 @@ if __name__ == "__main__":
     stock_manager.run_strategy(stocks_default, sma_strategy_default)
     stock_manager.calc_profit_for_stocks(stocks_default)
     stock_manager.visualize(stocks_default, sma_strategy_default)
-    stock_manager.send_mail_with_trend_change_signals(stocks_default, '2024-05-28', to_email)
+    #stock_manager.send_mail_with_trend_change_signals(stocks_default, '2024-05-28', to_email)
     #stock_manager.send_email_with_plots(stocks_default, sma_strategy_default, ['vladiks@gmail.com','oksi78@yahoo.com','oksi.shafransky@gmail.com'])

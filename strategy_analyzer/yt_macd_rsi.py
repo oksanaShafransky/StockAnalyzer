@@ -19,7 +19,62 @@ class YT_MACD_RSI_strategy(Strategy):
         max_val = series.max()
         return 2 * (series - min_val) / (max_val - min_val) - 1
 
+    def calculate_dmi(self, data, window=14):
+        """
+        Calculates the Directional Movement Index (DMI) for a DataFrame containing high, low, and close prices.
 
+        Args:
+            data (pd.DataFrame): DataFrame with columns 'High', 'Low', and 'Close'.
+            window (int, optional): The window length for calculating the DMI. Defaults to 14.
+
+        Returns:
+            pd.DataFrame: DataFrame with additional columns 'DX', 'ADX', 'ADXR'.
+        """
+
+        # # Add 'PriorClose' column with initial value (e.g., first close price)
+        # data['PriorClose'] = data['Close'].shift(1)
+        # data['PriorClose'].iloc[0] = data['Close'].iloc[0]  # Fill the first NaN value
+
+        # Avoid chained assignment warnings (use .loc for efficient updates)
+        data['PriorClose'] = data['Close'].shift(1)  # Create 'PriorClose' using .loc
+        data.loc[0, 'PriorClose'] = data['Close'].iloc[0]  # Fill the first NaN value using .loc
+
+        # Select relevant columns
+
+        # Calculate True High (TRH)
+        data['TRH'] = data[['High', 'PriorClose']].max(axis=1)
+
+        # Calculate True Low (TRL)
+        data['TRL'] = data[['Low', 'PriorClose']].min(axis=1)
+
+        # Calculate Upward Movement (UM)
+        data['UM'] = data['TRH'] - data['PriorClose']
+        data['UM'] = data['UM'].where(data['UM'] > 0, 0)
+
+        # Calculate Downward Movement (DM)
+        data['DM'] = data['PriorClose'] - data['TRL']
+        data['DM'] = data['DM'].where(data['DM'] > 0, 0)
+
+        # Calculate Smoothed True Range (SMATR)
+        data['SMATR'] = data['UM'].rolling(window=window).mean() + data['DM'].rolling(window=window).mean()
+
+        # Calculate DX (Directional Movement Index)
+        data['DX'] = 100 * data['UM'].rolling(window=window).mean() / data['SMATR']
+
+        # Calculate ADX (Average Directional Index)
+        data['ADX'] = data['DX'].rolling(window=window).mean()
+
+        # Calculate ADXR (Average Directional Movement Index Rating)
+        data['ADXR'] = (data['ADX'].shift(1) + data['ADX']) / 2
+
+        # Drop temporary columns
+        #data.drop(columns=['TRH', 'TRL', 'UM', 'DM', 'SMATR'], inplace=True)
+
+        # Shift Prior Close for the next calculation
+        data['PriorClose'] = data['Close'].shift(1)
+        data.dropna(inplace=True)  # Drop rows with NaN values
+
+        return data
 
     def calc_buy_sell(self, stock:Stock):
         stock_data = stock.stock_data
@@ -63,7 +118,7 @@ class YT_MACD_RSI_strategy(Strategy):
         )
         # Run it
         stock_data.ta.strategy(NonMPStrategy)
-
+        stock_data = self.calculate_dmi(stock_data)
 
         stock_data['Trend_Change'] = stock_data['Trend_Type'].ne(stock_data['Trend_Type'].shift()).astype(int)
 
@@ -112,14 +167,23 @@ class YT_MACD_RSI_strategy(Strategy):
         stock_data['Filtered_SELL'] = stock_data.index.isin(sell_signals)
 
     def visualize(self, stock:Stock):
-        fig, (ax1, ax2, ax3,ax4) = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
+        bar_width = 0.8
+        fig, (ax1, ax2, ax3,ax4,ax5) = plt.subplots(5, 1, figsize=(14, 10), sharex=True)
         ax1.plot(stock.stock_data['Close'], label='Close Price', color='blue')
-        ax1.plot(stock.stock_data['Close_Exp'], label='Exp Close Price', color='red')
 
-        ax1.plot(stock.stock_data['Moving_Avg'], label='Moving_Avg-Day Moving Average',
-                 color='orange')
-        ax1.plot(stock.stock_data['Moving_Avg'], label='Moving_Avg-Day Moving Average',
-                 color='green')
+        #plt.bar(stock.stock_data.index, stock.stock_data['High'] - stock.stock_data['Low'],color='black')  # Body (high - low)
+
+        # ax1.bar(stock.stock_data.index,stock.stock_data['Close'] - stock.stock_data['Open'], bar_width, bottom=stock.stock_data['Open'], color='black')
+        # ax1.bar(stock.stock_data.index,stock.stock_data['High'] - stock.stock_data['Close'], bar_width, bottom=stock.stock_data['Close'], color='green')
+        # ax1.bar(stock.stock_data.index,stock.stock_data['Low'] - stock.stock_data['Open'], bar_width, bottom=stock.stock_data['Low'], color='red')
+
+        plt.xticks(rotation=45)
+        #ax1.plot(stock.stock_data['Close_Exp'], label='Exp Close Price', color='red')
+
+        # ax1.plot(stock.stock_data.index, stock.stock_data['Moving_Avg'], label='Moving_Avg-Day Moving Average',
+        #          color='orange')
+        # ax1.plot(stock.stock_data['Moving_Avg'], label='Moving_Avg-Day Moving Average',
+        #          color='green')
 
         ax1.plot(stock.stock_data['Moving_Avg'], label='Moving_Avg-Day Moving Average',
                  color='orange')
@@ -161,9 +225,14 @@ class YT_MACD_RSI_strategy(Strategy):
 
         # Plot the additional data on the second subplot
         #ax2 = ax1.twinx()
+
+
         ax2.plot(stock.stock_data.index, stock.stock_data["MACD"], label="MACD", color="blue")
         ax2.plot(stock.stock_data.index, stock.stock_data["MACD_S"], label="Signal", color="red")
+
+        ax2.bar(stock.stock_data.index, stock.stock_data["MACD_H"], label="MACD_H", color="purple")
         ax2.set_ylabel("MACD")
+
 
         ax3.plot(stock.stock_data.index, stock.stock_data["RSI_10"], label="RSI_10", color="blue")
         ax3.plot(stock.stock_data.index, stock.stock_data["RSI_25"], label="RSI_25", color="red")
@@ -172,6 +241,13 @@ class YT_MACD_RSI_strategy(Strategy):
         ax4.plot(stock.stock_data.index, stock.stock_data["Descent"], label="Descent", color="blue")
         ax4.plot(stock.stock_data.index, stock.stock_data["Descent_Derivative"], label="Descent deriviative" , color="red")
         ax4.set_ylabel("Descent")
+
+        ax5.plot(stock.stock_data.index, stock.stock_data["DX"], label="DX", color="blue")
+        ax5.plot(stock.stock_data.index, stock.stock_data["ADXR"], label="ADXR", color="red")
+        ax5.plot(stock.stock_data.index, stock.stock_data["ADX"], label="ADX", color="green")
+        ax5.set_ylabel("DI")
+
+
 
         # ax2.plot(stock.stock_data.index, stock.stock_data['Distance_Per'], label='Distance_Per', color='purple')
         # ax2.plot(stock.stock_data.index, stock.stock_data['Distance_STD_HIGH'], label='Distance_STD_HIGH',
@@ -198,6 +274,8 @@ class YT_MACD_RSI_strategy(Strategy):
         ax2.legend()
         ax2.grid(True)
 
+
+
         ax3.set_title(f'{stock.ticker} RSI')
         ax3.set_xlabel('Date')
         ax3.set_ylabel('RSI')
@@ -205,11 +283,21 @@ class YT_MACD_RSI_strategy(Strategy):
         ax3.grid(True)
 
         plt.gca().xaxis.set_major_locator(plt.MaxNLocator(30))
+
         ax4.set_title(f'{stock.ticker} Descent')
         ax4.set_xlabel('Date')
         ax4.set_ylabel('Descent')
         ax4.legend()
         ax4.grid(True)
+
+        ax5.set_title(f'{stock.ticker} DI')
+        ax5.set_xlabel('Date')
+        ax5.set_ylabel('DI')
+        ax5.legend()
+        ax5.grid(True)
+
+
+
 
         plt.tight_layout()
         image_path = f"../plots/{stock.ticker}_stock_plot.png"
