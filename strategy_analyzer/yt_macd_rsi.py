@@ -22,94 +22,97 @@ class YT_MACD_RSI_strategy(Strategy):
 
 
     def calc_buy_sell(self, stock:Stock):
-        stock_data = stock.stock_data
+        try:
+            stock_data = stock.stock_data
 
-        stock_data['Moving_Avg'] = stock_data['Close'].rolling(window=self.window).mean()
-        stock_data['MA_Diff'] = stock_data['Moving_Avg'].diff()
-        stock_data['MA_Trend'] = np.where(stock_data['MA_Diff'] > 0, 1, -1)
-        stock_data['Close_Exp'] = stock_data['Close'].ewm(span=3, adjust=True).mean()
-        stock_data['Descent'] = (stock_data['Moving_Avg']  - stock_data['Moving_Avg'] .shift(12))
-        # Normalize the Descent column
-        stock_data['Descent'] = self.normalize(stock_data['Descent'])
-        stock_data['Smoothed_Descent'] = stock_data['Descent'].rolling(window=5, center=True).mean()
+            stock_data['Moving_Avg'] = stock_data['Close'].rolling(window=self.window).mean()
+            stock_data['MA_Diff'] = stock_data['Moving_Avg'].diff()
+            stock_data['MA_Trend'] = np.where(stock_data['MA_Diff'] > 0, 1, -1)
+            stock_data['Close_Exp'] = stock_data['Close'].ewm(span=3, adjust=True).mean()
+            stock_data['Descent'] = (stock_data['Moving_Avg']  - stock_data['Moving_Avg'] .shift(12))
+            # Normalize the Descent column
+            stock_data['Descent'] = self.normalize(stock_data['Descent'])
+            stock_data['Smoothed_Descent'] = stock_data['Descent'].rolling(window=5, center=True).mean()
 
-        # Calculate the derivative of the Smoothed_Descent column
-        stock_data['Descent_Derivative'] = stock_data['Smoothed_Descent'].diff()
-
-
-        #stock_data['Descent_Derivative'] = stock_data['Descent'].diff()
-        stock_data['Descent_Derivative'] = self.normalize(stock_data['Descent_Derivative'])
-
-        # Identify trend type
-        stock_data['Trend_Type'] = np.where(
-            abs(stock_data['MA_Diff'] / stock_data['Moving_Avg']) <= self.neutral_threshold,
-            'Neutral',
-            np.where(stock_data['MA_Diff'] > 0, 'Positive', 'Negative')
-        )
-
-        NonMPStrategy = ta.Strategy(
-            name="EMAs, BBs, and MACD",
-            description="Non Multiprocessing Strategy by rename Columns",
-            ta=[
-                {"kind": "ema", "length": 8},
-                {"kind": "ema", "length": 21},
-                {"kind": "ema", "length": 30},
-                {"kind": "ema", "length": 200},
-                {"kind": "rsi", "length": 10},
-                {"kind": "rsi", "length": 25},
-                {"kind": "bbands", "length": 20, "col_names": ("BBL", "BBM", "BBU","BBM1", "BBU1")},
-                {"kind": "macd", "fast": 12, "slow": 26, "signal":9, "col_names": ("MACD", "MACD_H", "MACD_S")}
-            ]
-        )
-        # Run it
-        stock_data.ta.strategy(NonMPStrategy)
+            # Calculate the derivative of the Smoothed_Descent column
+            stock_data['Descent_Derivative'] = stock_data['Smoothed_Descent'].diff()
 
 
-        stock_data['Trend_Change'] = stock_data['Trend_Type'].ne(stock_data['Trend_Type'].shift()).astype(int)
+            #stock_data['Descent_Derivative'] = stock_data['Descent'].diff()
+            stock_data['Descent_Derivative'] = self.normalize(stock_data['Descent_Derivative'])
 
-        stock_data['Distance'] = stock_data['Close'] - stock_data['Moving_Avg']
-        stock_data['Distance_Per'] = (stock_data['Distance'] * 100) / stock_data['Moving_Avg']
-        stock_data['Distance_MA'] = stock_data['Distance_Per'].rolling(window=self.window).mean()
-        stock_data['Distance_STD_PER'] = stock_data['Distance_Per'].rolling(window=self.window).std()
-        stock_data['Distance_STD_HIGH'] = stock_data['Distance_MA'] + stock_data['Distance_STD_PER']
-        stock_data['Distance_STD_LOW'] = stock_data['Distance_MA'] - stock_data['Distance_STD_PER']
+            # Identify trend type
+            stock_data['Trend_Type'] = np.where(
+                abs(stock_data['MA_Diff'] / stock_data['Moving_Avg']) <= self.neutral_threshold,
+                'Neutral',
+                np.where(stock_data['MA_Diff'] > 0, 'Positive', 'Negative')
+            )
 
-
-
-        stock_data['BUY'] = (
-                            # (stock_data['Trend_Type'] == 'Positive') &
-                             (stock_data['Close'] > stock_data['Moving_Avg']*1.015 )
-                            & (stock_data['Descent'] > 0.2 )
-
-                             #& (stock_data['Close'] > stock_data['EMA_200']*1.015 )
-                             & (stock_data['MACD'] < 0)
-                             & (stock_data['MACD_S'] < 0)
-                             & (stock_data['MACD_S'] < stock_data['MACD']))
-
-        stock_data['SELL'] = ((stock_data['Close'] < stock_data['Moving_Avg']*0.985)
-                              #| (stock_data['Close'] < stock_data['EMA_30'])
-                              #|((stock_data['Distance_Per'] > stock_data['Distance_MA'])
-                              #& (stock_data['Distance_STD_HIGH'] > stock_data['Distance_MA'])
-                              | (stock_data['RSI_10'] > 75)
-                              # |( (stock_data['MACD'] > 1)
-                              # & (stock_data['MACD_S'] > 1)
-                              # & (stock_data['MACD_S'] > stock_data['MACD']))
-                              )
+            NonMPStrategy = ta.Strategy(
+                name="EMAs, BBs, and MACD",
+                description="Non Multiprocessing Strategy by rename Columns",
+                ta=[
+                    {"kind": "ema", "length": 8},
+                    {"kind": "ema", "length": 21},
+                    {"kind": "ema", "length": 30},
+                    {"kind": "ema", "length": 200},
+                    {"kind": "rsi", "length": 10},
+                    {"kind": "rsi", "length": 25},
+                    {"kind": "bbands", "length": 20, "col_names": ("BBL", "BBM", "BBU","BBM1", "BBU1")},
+                    {"kind": "macd", "fast": 12, "slow": 26, "signal":9, "col_names": ("MACD", "MACD_H", "MACD_S")}
+                ]
+            )
+            # Run it
+            stock_data.ta.strategy(NonMPStrategy)
 
 
-        buy_signals = []
-        sell_signals = []
-        in_buy = False
-        for i, row in stock_data.iterrows():
-            if row['BUY'] and not in_buy:
-                buy_signals.append(i)
-                in_buy = True
-            elif row['SELL'] and in_buy:
-                sell_signals.append(i)
-                in_buy = False
+            stock_data['Trend_Change'] = stock_data['Trend_Type'].ne(stock_data['Trend_Type'].shift()).astype(int)
 
-        stock_data['Filtered_BUY'] = stock_data.index.isin(buy_signals)
-        stock_data['Filtered_SELL'] = stock_data.index.isin(sell_signals)
+            stock_data['Distance'] = stock_data['Close'] - stock_data['Moving_Avg']
+            stock_data['Distance_Per'] = (stock_data['Distance'] * 100) / stock_data['Moving_Avg']
+            stock_data['Distance_MA'] = stock_data['Distance_Per'].rolling(window=self.window).mean()
+            stock_data['Distance_STD_PER'] = stock_data['Distance_Per'].rolling(window=self.window).std()
+            stock_data['Distance_STD_HIGH'] = stock_data['Distance_MA'] + stock_data['Distance_STD_PER']
+            stock_data['Distance_STD_LOW'] = stock_data['Distance_MA'] - stock_data['Distance_STD_PER']
+
+
+
+            stock_data['BUY'] = (
+                                # (stock_data['Trend_Type'] == 'Positive') &
+                                 (stock_data['Close'] > stock_data['Moving_Avg']*1.015 )
+                                & (stock_data['Descent'] > 0.2 )
+
+                                 #& (stock_data['Close'] > stock_data['EMA_200']*1.015 )
+                                 & (stock_data['MACD'] < 0)
+                                 & (stock_data['MACD_S'] < 0)
+                                 & (stock_data['MACD_S'] < stock_data['MACD']))
+
+            stock_data['SELL'] = ((stock_data['Close'] < stock_data['Moving_Avg']*0.985)
+                                  #| (stock_data['Close'] < stock_data['EMA_30'])
+                                  #|((stock_data['Distance_Per'] > stock_data['Distance_MA'])
+                                  #& (stock_data['Distance_STD_HIGH'] > stock_data['Distance_MA'])
+                                  | (stock_data['RSI_10'] > 75)
+                                  # |( (stock_data['MACD'] > 1)
+                                  # & (stock_data['MACD_S'] > 1)
+                                  # & (stock_data['MACD_S'] > stock_data['MACD']))
+                                  )
+
+
+            buy_signals = []
+            sell_signals = []
+            in_buy = False
+            for i, row in stock_data.iterrows():
+                if row['BUY'] and not in_buy:
+                    buy_signals.append(i)
+                    in_buy = True
+                elif row['SELL'] and in_buy:
+                    sell_signals.append(i)
+                    in_buy = False
+
+            stock_data['Filtered_BUY'] = stock_data.index.isin(buy_signals)
+            stock_data['Filtered_SELL'] = stock_data.index.isin(sell_signals)
+        except Exception as e:
+            print(f'Cannot calculate buy/sell for ticker {stock.ticker}: {e}')
 
     def visualize(self, stock:Stock):
         fig, (ax1, ax2, ax3,ax4) = plt.subplots(4, 1, figsize=(14, 10), sharex=True)
