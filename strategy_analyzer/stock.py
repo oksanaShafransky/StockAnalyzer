@@ -34,6 +34,63 @@ class Stock:
         total_profit = profit_df['Profit'].sum()
         return profit_df, total_profit
 
+    def calculate_rsi(self, period=14):
+        delta = self.stock_data['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).fillna(0)
+        loss = (-delta.where(delta < 0, 0)).fillna(0)
+
+        avg_gain = gain.rolling(window=period, min_periods=1).mean()
+        avg_loss = loss.rolling(window=period, min_periods=1).mean()
+
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        self.stock_data['RSI'] = rsi
+
+    def compute_cmf(self, window=20):
+        """
+        This function computes the Chaikin Money Flow (CMF) for a given DataFrame.
+
+        Args:
+            data (pd.DataFrame): DataFrame containing at least 'High', 'Low', 'Close', and 'Volume' columns.
+            window (int, optional): The window size for calculating the CMF. Defaults to 20.
+
+        Returns:
+            pd.DataFrame: The original DataFrame with an additional 'CMF' column.
+        """
+        # Money Flow Ratio (MFR)
+        self.stock_data['MFR'] = ((self.stock_data['Close'] - self.stock_data['Low']) / (
+                    self.stock_data['High'] - self.stock_data['Low'])) * self.stock_data['Volume']
+
+        # Average Money Flow Ratio (AMFR)
+        self.stock_data['AMFR'] = self.stock_data['MFR'].rolling(window=window).mean()
+
+        # Chaikin Money Flow (CMF)
+        self.stock_data['CMF'] = (self.stock_data['MFR'] - self.stock_data['AMFR']) / (
+                    self.stock_data['High'] - self.stock_data['Low'])
+
+    def compute_cci(self, window=14):
+        """
+        This function computes the CCI for a given DataFrame.
+
+        Args:
+            data (pd.DataFrame): DataFrame containing at least 'High', 'Low', and 'Close' columns.
+            window (int, optional): The window size for calculating the Typical Price (TP). Defaults to 14.
+
+        Returns:
+            pd.DataFrame: The original DataFrame with an additional 'CCI' column.
+        """
+        # Calculate the Typical Price (TP)
+        self.stock_data['TP'] = (self.stock_data['High'] + self.stock_data['Low'] + self.stock_data['Close']) / 3
+
+        # Calculate the Mean Deviation (MD)
+        self.stock_data['MD'] = self.stock_data['TP'].rolling(window=window).std()
+
+        # Avoid division by zero for the first 'window' rows with NaN in 'MD'
+        self.stock_data['MD'] = self.stock_data['MD'].replace(to_replace=0, method='ffill')
+
+        # Calculate the CCI
+        self.stock_data['CCI'] = (self.stock_data['Close'] - self.stock_data['TP']) / (0.015 * self.stock_data['MD'])
+
 
     def is_ticker_trading(self):
         try:

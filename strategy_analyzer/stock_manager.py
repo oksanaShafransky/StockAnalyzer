@@ -37,9 +37,9 @@ class StockManager:
         response = requests.get(url)
         if response.status_code == 200:
             data = response.text
-            with open("tickers.csv", "w") as file:
+            with open("../summary_tables/tickers.csv", "w") as file:
                 file.write(data)
-            tickers_df = pd.read_csv("tickers.csv")
+            tickers_df = pd.read_csv("../summary_tables/tickers.csv")
             return tickers_df
         else:
             print(f"Error fetching tickers from Alpha Vantage: {response.status_code}")
@@ -140,20 +140,6 @@ class StockManager:
         normalized_data = (data - rolling_min) / (rolling_max - rolling_min)
         return normalized_data
 
-    def calculate_rsi(self, stock, period=14):
-        delta = stock.stock_data['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).fillna(0)
-        loss = (-delta.where(delta < 0, 0)).fillna(0)
-
-        avg_gain = gain.rolling(window=period, min_periods=1).mean()
-        avg_loss = loss.rolling(window=period, min_periods=1).mean()
-
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-
-        stock.stock_data['RSI'] = rsi
-        return stock.stock_data
-
     def get_all_trend_changers_tickers(self, ticker_names:[], start_date, end_date, to_email, top_stocks=1000)->[]:
         if not ticker_names:
             ticker_names = pd.read_csv('../profits/top_1000_nasdaq_tickers.csv')['Symbol'][:top_stocks]
@@ -178,11 +164,11 @@ class StockManager:
                     stock_data['Date'] = pd.to_datetime(stock_data['Date'])
                     stock_data.set_index('Date', inplace=True)
                     stock = Stock(stock.info['shortName'], ticker, stock_data, stock_info)
-                    trend_change_SMA150 = stock.get_trend_change_signal(end_date, window=150)
-                    trend_change_SMA50 =  stock.get_trend_change_signal(end_date, window=50)
-                    trend_change_SMA20 =  stock.get_trend_change_signal(end_date, window=20)
-                    trend_change_SMA14 =  stock.get_trend_change_signal(end_date, window=14)
-                    trend_change_SMA7 =   stock.get_trend_change_signal(end_date, window=7)
+                    # trend_change_SMA150 = stock.get_trend_change_signal(end_date, window=150)
+                    # trend_change_SMA50 =  stock.get_trend_change_signal(end_date, window=50)
+                    # trend_change_SMA20 =  stock.get_trend_change_signal(end_date, window=20)
+                    # trend_change_SMA14 =  stock.get_trend_change_signal(end_date, window=14)
+                    # trend_change_SMA7 =   stock.get_trend_change_signal(end_date, window=7)
                     stock.stock_data[f'Moving_Avg_{150}'] = stock.stock_data['Close'].rolling(window=150).mean()
                     stock.stock_data[f'Moving_Avg_{50}'] = stock.stock_data['Close'].rolling(window=50).mean()
                     stock.stock_data[f'Moving_Avg_{20}'] = stock.stock_data['Close'].rolling(window=20).mean()
@@ -193,27 +179,31 @@ class StockManager:
                     sma50_price = stock.stock_data.loc[str(current_date), f'Moving_Avg_{50}'].round(2)
                     sma20_price = stock.stock_data.loc[str(current_date), f'Moving_Avg_{20}'].round(2)
                     sma7_price = stock.stock_data.loc[str(current_date), f'Moving_Avg_{7}'].round(2)
-                    self.calculate_rsi(stock)
+                    stock.calculate_rsi()
+                    stock.compute_cmf()
+                    stock.compute_cci()
                     rsi = stock.stock_data.loc[str(current_date), 'RSI'].round(2)
+                    cmf = stock.stock_data.loc[str(current_date), 'CMF'].round(2)
+                    cci = stock.stock_data.loc[str(current_date), 'CCI'].round(2)
                     stock.stock_data['Normalized_Close'] = self.rolling_normalize_to_base(stock.stock_data['Close'],150)
                     stock.stock_data['Normalized_Close_30'] = self.rolling_normalize_to_base(stock.stock_data['Close'],30)
                     #stock.stock_data['Normalized_Close'] = self.normalize_to_reference(stock.stock_data['Close'], spy_stock.stock_data['Close'])
-                    normalized_close_vs_spy = stock.stock_data.loc[str(current_date), 'Normalized_Close'] - spy_stock.stock_data.loc[str(current_date), 'Normalized_Close'].round(3)
+                    normalized_close_vs_spy = (stock.stock_data.loc[str(current_date), 'Normalized_Close'] - spy_stock.stock_data.loc[str(current_date), 'Normalized_Close']).round(3)
                     print(f'Processing ticker {stock.name} {stock.ticker} counter = {i} of {top_stocks}')
                     #if trend_change_SMA150=='Negative to Positive':
-                    distance_percentage = (close_price - sma150_price)*100/sma150_price
+                    distance_percentage = ((close_price - sma150_price)*100/sma150_price).round(3)
                     if close_price > sma150_price:
-                        plot_filename = stock.plot_stock_data_for_spy(end_date, spy_stock)
-                        attachments.append(plot_filename)
+                        #plot_filename = stock.plot_stock_data_for_spy(end_date, spy_stock)
+                        #attachments.append(plot_filename)
                         current_price = stock.stock_data.loc[str(end_date)[:10], 'Close'].round(2)
                         link = f'https://finance.yahoo.com/quote/{stock.ticker}'
-                        summary_table_data.append([stock.ticker, stock.name, current_price, sma150_price,  distance_percentage, normalized_close_vs_spy, rsi, sma50_price,sma20_price, sma7_price, stock.stock_info['beta'], stock.stock_info['recommendationKey'], stock.stock_info['numberOfAnalystOpinions'], link])
+                        summary_table_data.append([stock.ticker, stock.name, current_price, sma150_price,  distance_percentage, normalized_close_vs_spy, rsi, cmf, cci, sma50_price,sma20_price, sma7_price, stock.stock_info['beta'], stock.stock_info['recommendationKey'], stock.stock_info['numberOfAnalystOpinions'], link])
                         watch_list_table.append([f'{stock.ticker}','441.58','2024/06/13','16:00 EDT','0.519989','440.78','443.39','439.37','15858484','','','','','','',''])
                         print(f'=============found trend change for ticker {ticker}: close_price = {close_price}, current_price = {current_price} ================')
                 except Exception as e:
                     print(f'Failed get data for ticker {ticker}: {e}')
                     continue
-            summary_table_df = pd.DataFrame(summary_table_data, columns=['Ticker', 'Name', 'Current Price', 'sma150_price', 'distance_percentage', 'vs_spy', 'rsi', 'sma50_price', 'sma20_price','sma7_price','beta','recommendationKey','numberOfAnalystOpinions','Link']).sort_values(by='rsi')
+            summary_table_df = pd.DataFrame(summary_table_data, columns=['Ticker', 'Name', 'Current Price', 'sma150_price', 'distance_percentage', 'vs_spy', 'rsi', 'cmf', 'cci', 'sma50_price', 'sma20_price','sma7_price','beta','recommendationKey','numberOfAnalystOpinions','Link']).sort_values(by='rsi')
 
             self.save_chunks(pd.DataFrame(watch_list_table), file_name=f'watch_list_table_{end_date.date()}', attachments=attachments)
             # for i in range(max(1, int(len(watch_list_table)%300))):
@@ -223,7 +213,7 @@ class StockManager:
             #         writer.writerows(watch_list_table)
             #         attachments.append(watch_list_file_name)
 
-            summary_file_name = f'summary_table_{end_date.date()}.csv'
+            summary_file_name = f'../summary_tables/summary_table_{end_date.date()}.csv'
             summary_table_df.to_csv(summary_file_name, index=False)
             attachments.append(summary_file_name)
 
