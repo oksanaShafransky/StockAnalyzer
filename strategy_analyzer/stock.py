@@ -1,7 +1,7 @@
 import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
-
+import numpy as np
 
 class Stock:
     def __init__(self, name: str, ticker: str, stock_data, stock_info=None):
@@ -86,11 +86,44 @@ class Stock:
         self.stock_data['MD'] = self.stock_data['TP'].rolling(window=window).std()
 
         # Avoid division by zero for the first 'window' rows with NaN in 'MD'
-        self.stock_data['MD'] = self.stock_data['MD'].replace(to_replace=0, method='ffill')
+        self.stock_data['MD'] = self.stock_data['MD'].replace(0, pd.NA).ffill()
 
         # Calculate the CCI
         self.stock_data['CCI'] = (self.stock_data['Close'] - self.stock_data['TP']) / (0.015 * self.stock_data['MD'])
 
+    def klinger_volume_indicator(self, short_period=34, long_period=55, signal_period=13):
+        # Calculate the Trend
+        self.stock_data['trend'] = np.where(
+            self.stock_data['High'] + self.stock_data['Low'] + self.stock_data['Close'] > self.stock_data['High'].shift(1) + self.stock_data['Low'].shift(1) + self.stock_data['Close'].shift(1), 1,
+            np.where(
+                self.stock_data['High'] + self.stock_data['Low'] + self.stock_data['Close'] < self.stock_data['High'].shift(1) + self.stock_data['Low'].shift(1) + self.stock_data['Close'].shift(1),
+                -1, 0))
+
+        # Calculate Volume Force (VF)
+        self.stock_data['dm'] = np.where(self.stock_data['trend'] == self.stock_data['trend'].shift(1), self.stock_data['High'] - self.stock_data['Low'],
+                            self.stock_data['High'] - self.stock_data['Low'] + (self.stock_data['High'] - self.stock_data['Close'].shift(1)) + (
+                                        self.stock_data['Close'].shift(1) - self.stock_data['Low']))
+        self.stock_data['vf'] = self.stock_data['dm'] * self.stock_data['Volume'] * self.stock_data['trend']
+
+        # Calculate the Klinger Oscillator (KO)
+        self.stock_data['ko'] = self.stock_data['vf'].rolling(window=short_period).sum() - self.stock_data['vf'].rolling(window=long_period).sum()
+
+        # Calculate the Signal Line
+        self.stock_data['klinger_signal'] = self.stock_data['ko'].rolling(window=signal_period).mean()
+
+    def positive_volume_index(self):
+        # Initialize the PVI column
+        self.stock_data['pvi'] = 0.0
+
+        # Set the first value of PVI to the first value of the close price
+        self.stock_data.at[0, 'pvi'] = 1000  # You can start PVI at 1000 or the initial close price if preferred
+
+        # Iterate over the rows of the DataFrame starting from the second row
+        for i in range(1, len(self.stock_data)):
+            if self.stock_data.iloc[i].Volume > self.stock_data.iloc[i-1].Volume:
+                self.stock_data['pvi'][i] = self.stock_data['pvi'][i - 1] + (self.stock_data.iloc[i].Close - self.stock_data.iloc[i-1].Close) / self.stock_data[i-1].Close * self.stock_data['pvi'][i-1]
+            else:
+                self.stock_data['pvi'][i] = self.stock_data.iloc[i-1].pvi
 
     def is_ticker_trading(self):
         try:
