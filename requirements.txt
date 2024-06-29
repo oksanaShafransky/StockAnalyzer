@@ -41,3 +41,5 @@ yahoo-fin==0.8.9.1
 yfinance==0.2.40
 zipp==3.19.2
 pandas_ta
+gspread
+oauth2client

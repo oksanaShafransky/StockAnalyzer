@@ -147,7 +147,7 @@ class StockManager:
                 stock = yf.Ticker(ticker)
                 #stock_data = stock.history(start=start_date, end=end_date)
                 #stock = yf.download(ticker, period=f'{345}d', interval='1d')
-                stock_data = stock.history(period='max', interval='1d')
+                stock_data = stock.history(period='2y', interval='1d')
                 stock_data.reset_index(inplace=True)
                 stock_info = stock.info
 
@@ -167,6 +167,13 @@ class StockManager:
                 stock.stock_data[f'Moving_Avg_{50}'] = stock.stock_data['Close'].rolling(window=50).mean()
                 stock.stock_data[f'Moving_Avg_{20}'] = stock.stock_data['Close'].rolling(window=20).mean()
                 stock.stock_data[f'Moving_Avg_{7}'] = stock.stock_data['Close'].rolling(window=7).mean()
+
+                stock.stock_data['low7'] = stock.stock_data['Low'].rolling(window=7).min()
+                stock.stock_data['high7'] = stock.stock_data['High'].rolling(window=7).max()
+                stock.stock_data['close7'] = stock.stock_data['Close']
+                stock.stock_data['volume7'] = stock.stock_data['Volume'].rolling(window=7).sum()
+
+
                 stock.stock_data['SMA_Volume150'] = stock.stock_data['Volume'].rolling(window=150).mean()
                 stock.stock_data['STD_Volume150'] = stock.stock_data['Volume'].rolling(window=150).std()
                 current_date = stock.stock_data.index[-1]
@@ -184,9 +191,14 @@ class StockManager:
                 stock.compute_cci()
                 stock.positive_volume_index()
                 stock.klinger_oscillator()
+                stock.klinger_volume_oscillator7()
+                stock.klinger_volume_oscillator_tv()
                 rsi = stock.stock_data.loc[str(current_date), 'RSI'].round(2)
                 cmf = stock.stock_data.loc[str(current_date), 'CMF'].round(2)
                 cci = stock.stock_data.loc[str(current_date), 'CCI'].round(2)
+                avg_maxima, median_maxima = stock.calculate_maxima_statistics()
+                avg_maxima_perc = (((avg_maxima - close_price) / avg_maxima) * 100).round(3)
+                median_maxima_perc = (((median_maxima - close_price) / median_maxima) * 100).round(3)
                 stock.stock_data['Normalized_Close'] = self.rolling_normalize_to_base(stock.stock_data['Close'], 150)
                 stock.stock_data['Normalized_Close_30'] = self.rolling_normalize_to_base(stock.stock_data['Close'], 30)
                 normalized_close_vs_spy = (stock.stock_data.loc[str(current_date.date()), 'Normalized_Close'] - spy_stock.stock_data.iloc[-1]['Normalized_Close']).round(3)
@@ -197,6 +209,14 @@ class StockManager:
 
                 klinger_sell = stock.stock_data['klinger_sell_signal'].iloc[-1]
                 klinger_buy = stock.stock_data['klinger_buy_signal'].iloc[-1]
+                klinger7_signal = stock.stock_data.loc[str(current_date), 'Trigger7'].round(2)
+                klinger7_kvo = stock.stock_data.loc[str(current_date), 'KVO7'].round(2)
+                klinger7_sell = stock.stock_data['klinger7_sell_signal'].iloc[-1]
+                klinger7_buy = stock.stock_data['klinger7_buy_signal'].iloc[-1]
+                klinger_tv_signal = stock.stock_data.loc[str(current_date), 'Trigger'].round(2)
+                klinger_tv_kvo = stock.stock_data.loc[str(current_date), 'KVO'].round(2)
+                klinger_tv_sell = stock.stock_data['klinger_tv_sell_signal'].iloc[-1]
+                klinger_tv_buy = stock.stock_data['klinger_tv_buy_signal'].iloc[-1]
                 pvi_sell = stock.stock_data['pvi_sell_signal'].iloc[-1]
                 pvi_buy = stock.stock_data['pvi_buy_signal'].iloc[-1]
 
@@ -210,26 +230,29 @@ class StockManager:
                     removed_stocks.append([stock.ticker, stock.name, previous_close, close_price, price_change_pct, prev_sma150_price, sma150_price, volume, volume_change_pct, sma150_volume, std150_volume])
                     print(f'Ticker {stock.ticker}, {stock.name} removed from the current day list')
 
-                if pvi_buy or klinger_buy:
+                if (pvi_buy or klinger_tv_buy) and close_price > sma150_price:
                     buy_indicator.append([f'{stock.ticker}', '441.58', '2024/06/13', '16:00 EDT', '0.519989', '440.78', '443.39','439.37', '15858484', '', '', '', '', '', '', ''])
                     print(f'Ticker {stock.ticker}, {stock.name} added to buy indicator list')
 
-                if pvi_sell or klinger_sell:
+                if (pvi_sell or klinger_tv_sell) and close_price < sma150_price:
                     sell_indicator.append([f'{stock.ticker}', '441.58', '2024/06/13', '16:00 EDT', '0.519989', '440.78', '443.39', '439.37', '15858484', '', '', '', '', '', '', ''])
                     print(f'Ticker {stock.ticker}, {stock.name} added to sell indicator list')
 
-                #klinger and pvi
+                #volume
                 if volume > (sma150_volume + std150_volume):
                     unusual_volume.append([stock.ticker, stock.name, previous_close, close_price,price_change_pct, prev_sma150_price, sma150_price, volume, volume_change_pct, sma150_volume, std150_volume])
                     print(f'Ticker {stock.ticker}, {stock.name} added to unusual volume list')
-
+                #plot_filename = stock.plot_stock_data_for_spy(current_date, spy_stock)
                 if close_price > sma150_price:
-                    #plot_filename = stock.plot_stock_data_for_spy(current_date, spy_stock)
+
                     # attachments.append(plot_filename)
                     link = f'https://finance.yahoo.com/quote/{stock.ticker}'
                     summary_table_data.append(
                         [stock.ticker, stock.name, close_price, price_change_pct, sma150_price, volume, volume_change_pct, sma150_volume, std150_volume, distance_percentage,
-                         normalized_close_vs_spy, klinger_sell, klinger_buy, pvi_sell, pvi_buy, rsi, cmf, cci, sma50_price, sma20_price, sma7_price,
+                         normalized_close_vs_spy, klinger_sell, klinger_buy,
+                         klinger_tv_signal, klinger_tv_kvo, klinger_tv_sell, klinger_tv_buy,
+                         klinger7_signal, klinger7_kvo, klinger7_sell, klinger7_buy,
+                         pvi_sell, pvi_buy, avg_maxima_perc, median_maxima_perc, rsi, cmf, cci, sma50_price, sma20_price, sma7_price,
                          stock.stock_info['beta'], stock.stock_info['recommendationKey'],
                          stock.stock_info['numberOfAnalystOpinions'], link])
                     watch_list_table.append(
@@ -242,6 +265,8 @@ class StockManager:
                 continue
 
     def get_all_trend_changers_tickers(self, ticker_names:[], start_date, end_date, to_email, top_stocks=1000)->[]:
+        portfolio_df = df = pd.read_csv('../portfolio/portfolio_dash.csv')
+
         if not ticker_names:
             ticker_names = pd.read_csv('../profits/top_1000_nasdaq_tickers.csv')['Symbol'][:top_stocks]
 
@@ -264,8 +289,11 @@ class StockManager:
              'Purchase Price', 'Quantity', 'Commission', 'High Limit',
              'Low Limit', 'Comment']
             summary_columns = ['Ticker', 'Name', 'Current Price', 'price_change_pct', 'sma150_price', 'Volume', 'volume_change_pct', 'sma150_volume',
-             'std150_volume', 'distance_percentage', 'vs_spy', 'klinger_sell_signal', 'klinger_buy_signal', 'pvi_sell_signal','pvi_sell_signal','rsi', 'cmf', 'cci',
-             'sma50_price', 'sma20_price', 'sma7_price', 'beta', 'recommendationKey', 'numberOfAnalystOpinions', 'Link']
+             'std150_volume', 'distance_percentage', 'vs_spy', 'klinger_sell_signal', 'klinger_buy_signal',
+                               'kelinger_tv_signal','kelinger_tv_ko','kelinger_tv_buy_signal','kelinger_tv_buy_signal',
+                               'kelinger7_signal', 'kelinger7_ko', 'kelinger7_buy_signal','kelinger7_buy_signal',
+                               'pvi_sell_signal','pvi_sell_signal','avg_maxima_perc', 'median_maxima_perc',
+                               'rsi', 'cmf', 'cci', 'sma50_price', 'sma20_price', 'sma7_price', 'beta', 'recommendationKey', 'numberOfAnalystOpinions', 'Link']
             short_list_columns = ['ticker', 'name', 'previous_close', 'close_price', 'price_change_pct','prev_sma150_price',
                                   'sma150_price', 'volume', 'volume_change_pct', 'sma150_volume', 'std150_volume']
 
@@ -284,7 +312,7 @@ class StockManager:
                 attachments.append(added_stocks_file_name)
                 self.save_chunks(pd.DataFrame(added_stocks_watch_list,
                                               columns=watch_list_columns),
-                                 file_name=f'added_stocks_watch_list_table_{end_date.date()}', attachments=attachments)
+                                 file_name=f'../summary_tables/added_stocks_watch_list_table_{end_date.date()}', attachments=attachments)
 
             if removed_stocks:
                 removed_stocks_df = pd.DataFrame(removed_stocks, columns=short_list_columns)
@@ -300,10 +328,10 @@ class StockManager:
                 attachments.append(unusual_volume_file_name)
 
             if indicator_sell_list:
-                self.save_chunks(pd.DataFrame(indicator_sell_list, columns=watch_list_columns), file_name=f'indicator_sell_watch_list_table_{end_date.date()}', attachments=attachments)
+                self.save_chunks(pd.DataFrame(indicator_sell_list, columns=watch_list_columns), file_name=f'../summary_tables/indicator_sell_watch_list_table_{end_date.date()}', attachments=attachments)
 
             if indicator_buy_list:
-                self.save_chunks(pd.DataFrame(indicator_buy_list, columns=watch_list_columns), file_name=f'indicator_buy_watch_list_table_{end_date.date()}', attachments=attachments)
+                self.save_chunks(pd.DataFrame(indicator_buy_list, columns=watch_list_columns), file_name=f'../summary_tables/indicator_buy_watch_list_table_{end_date.date()}', attachments=attachments)
 
             #summary_table = summary_table_df.to_string(index=False)
             if attachments:

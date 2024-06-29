@@ -74,6 +74,45 @@ class Stock:
         self.stock_data['CMF'] = (self.stock_data['MFR'] - self.stock_data['AMFR']) / (
                     self.stock_data['High'] - self.stock_data['Low'])
 
+    def calculate_maxima_statistics(self):
+        # Find the indices of the zero values
+        #zero_indices = self.stock_data.index[(self.stock_data['klinger_buy_signal'] or self.stock_data['klinger_sell_signal'])].tolist()
+        zero_indices_sell = self.stock_data.index[self.stock_data['klinger_sell_signal']].tolist()
+        zero_indices_buy = self.stock_data.index[self.stock_data['klinger_buy_signal']].tolist()
+        zero_indices = zero_indices_buy + zero_indices_sell
+        zero_indices.sort()
+        #zero_indices = self.stock_data.index[self.stock_data[column_name] == 0].tolist()
+
+        # If there are less than two zeroes, return NaN for both average and median
+        if len(zero_indices) < 2:
+            return np.nan, np.nan
+
+        maxima = []
+
+        # Iterate through the segments between zero values
+        for i in range(len(zero_indices) - 1):
+            start_idx = zero_indices[i]
+            end_idx = zero_indices[i + 1]
+            #segment = self.stock_data['Close'][start_idx:end_idx]
+
+            segment = (self.stock_data['Close'][end_idx]-self.stock_data['Close'][start_idx])*100/self.stock_data['Close'][start_idx]
+
+
+            # Find the absolute local maximum in the segment
+            #if len(segment) > 0:
+                #maxima.append(segment.abs().max())
+            maxima.append(np.abs(segment))
+
+        # Calculate the average and median of the maxima
+        if len(maxima) > 0:
+            avg_maxima = np.mean(maxima)
+            median_maxima = np.median(maxima)
+        else:
+            avg_maxima = np.nan
+            median_maxima = np.nan
+
+        return avg_maxima, median_maxima
+
     def compute_cci(self, window=14):
         """
         This function computes the CCI for a given DataFrame.
@@ -97,63 +136,6 @@ class Stock:
         # Calculate the CCI
         self.stock_data['CCI'] = (self.stock_data['Close'] - self.stock_data['TP']) / (0.015 * self.stock_data['MD'])
 
-    def klinger_volume_indicator(self, fast_period=34, slow_period=55, signal_period=13):
-        df = kvo(self.stock_data["High"], self.stock_data["Low"], self.stock_data["Close"], self.stock_data["Volume"])
-
-        # Generate signal based on crossover
-        threshold = 0  # Zero line
-#KVOs_34_55_13
-        self.stock_data["kvo"]=self.stock_data['KVOs_34_55_13']
-        self.stock_data["signal"] = np.where(self.stock_data["KVO_34_55_13"].diff() > 0, 1, np.nan)  # Buy on positive crossover
-        self.stock_data["signal"] = np.where(self.stock_data["KVO_34_55_13"].diff() < 0, -1, self.stock_data["signal"])  # Sell on negative crossover
-
-        # Handle first value (no previous value for diff)
-        self.stock_data.loc[0, "signal"] = np.nan
-        # Calculate True Range High and True Range Low
-        # self.stock_data['previous_close'] = self.stock_data['Close'].shift(1)
-        # self.stock_data['trh'] = self.stock_data[['High', 'previous_close']].max(axis=1)
-        # self.stock_data['trl'] = self.stock_data[['Low', 'previous_close']].min(axis=1)
-        #
-        # # Calculate Volume Force (VF)
-        # self.stock_data['dm'] = self.stock_data['trh'] - self.stock_data['trl']
-        # self.stock_data['vf'] = self.stock_data['dm'] * self.stock_data['Volume'] * ( np.sign(self.stock_data['Close'] - self.stock_data['previous_close']) + 1)
-        #
-        # # Calculate Cumulative Volume Force (CVF)
-        # self.stock_data['cvf'] = self.stock_data['vf'].cumsum()
-        #
-        # # Calculate fast and slow EMAs of CVF
-        # self.stock_data['fast_cvf_ema'] = self.stock_data['cvf'].ewm(span=fast_period, adjust=False).mean()
-        # self.stock_data['slow_cvf_ema'] = self.stock_data['cvf'].ewm(span=slow_period, adjust=False).mean()
-        #
-        # # Calculate Klinger Oscillator (KO)
-        # self.stock_data['ko'] = self.stock_data['fast_cvf_ema'] - self.stock_data['slow_cvf_ema']
-        #
-        # # Calculate Signal Line (EMA of KO)
-        # self.stock_data['signal'] = self.stock_data['ko'].ewm(span=signal_period, adjust=False).mean()
-        #
-        # # Generate buy/sell signals
-        # self.stock_data['buy_signal'] = (self.stock_data['ko'] > self.stock_data['signal']) & (self.stock_data['ko'].shift(1) <= self.stock_data['signal'].shift(1))
-        # self.stock_data['sell_signal'] = (self.stock_data['ko'] < self.stock_data['signal']) & (self.stock_data['ko'].shift(1) >= self.stock_data['signal'].shift(1))
-
-    def klinger_volume_indicator2(self, short_period=34, long_period=55, signal_period=13):
-        # Calculate the Trend
-        self.stock_data['trend'] = np.where(
-            self.stock_data['High'] + self.stock_data['Low'] + self.stock_data['Close'] > self.stock_data['High'].shift(1) + self.stock_data['Low'].shift(1) + self.stock_data['Close'].shift(1), 1,
-            np.where(
-                self.stock_data['High'] + self.stock_data['Low'] + self.stock_data['Close'] < self.stock_data['High'].shift(1) + self.stock_data['Low'].shift(1) + self.stock_data['Close'].shift(1),
-                -1, 0))
-
-        # Calculate Volume Force (VF)
-        self.stock_data['dm'] = np.where(self.stock_data['trend'] == self.stock_data['trend'].shift(1), self.stock_data['High'] - self.stock_data['Low'],
-                            self.stock_data['High'] - self.stock_data['Low'] + (self.stock_data['High'] - self.stock_data['Close'].shift(1)) + (
-                                        self.stock_data['Close'].shift(1) - self.stock_data['Low']))
-        self.stock_data['vf'] = self.stock_data['dm'] * self.stock_data['Volume'] * self.stock_data['trend']
-
-        # Calculate the Klinger Oscillator (KO)
-        self.stock_data['ko'] = self.stock_data['vf'].rolling(window=short_period).sum() - self.stock_data['vf'].rolling(window=long_period).sum()
-
-        # Calculate the Signal Line
-        self.stock_data['klinger_signal'] = self.stock_data['ko'].rolling(window=signal_period).mean()
 
     #####################################################
     def positive_volume_index(self, ma_period=255):
@@ -176,6 +158,42 @@ class Stock:
         # Generate buy/sell signals
         self.stock_data['pvi_buy_signal'] = (self.stock_data['pvi'] > self.stock_data['pvi_ma']) & (self.stock_data['pvi'].shift(1) <= self.stock_data['pvi_ma'].shift(1))
         self.stock_data['pvi_sell_signal'] = (self.stock_data['pvi'] < self.stock_data['pvi_ma']) & (self.stock_data['pvi'].shift(1) >= self.stock_data['pvi_ma'].shift(1))
+
+
+##############################################################
+    def klinger_volume_oscillator_tv(self, trig_len=13, fast_x=34, slow_x=55):
+        hlc3 = (self.stock_data['High'] + self.stock_data['Low'] + self.stock_data['Close']) / 3
+        x_trend = (self.stock_data['Volume'] * 100).where(hlc3 > hlc3.shift(1), -self.stock_data['Volume'] * 100)
+
+        x_fast = x_trend.ewm(span=fast_x, adjust=False).mean()
+        x_slow = x_trend.ewm(span=slow_x, adjust=False).mean()
+
+        x_kvo = x_fast - x_slow
+        x_trigger = x_kvo.ewm(span=trig_len, adjust=False).mean()
+
+        self.stock_data['KVO'] = x_kvo
+        self.stock_data['Trigger'] = x_trigger
+
+        # Buy and Sell signals
+        self.stock_data['klinger_tv_buy_signal'] = (self.stock_data['KVO'] > self.stock_data['Trigger']) & (self.stock_data['KVO'].shift(1) <= self.stock_data['Trigger'].shift(1))
+        self.stock_data['klinger_tv_sell_signal'] = (self.stock_data['KVO'] < self.stock_data['Trigger']) & (self.stock_data['KVO'].shift(1) >= self.stock_data['Trigger'].shift(1))
+
+    def klinger_volume_oscillator7(self, trig_len=13, fast_x=34, slow_x=55):
+        hlc3 = (self.stock_data['high7'] + self.stock_data['low7'] + self.stock_data['close7']) / 3
+        x_trend = (self.stock_data['volume7'] * 100).where(hlc3 > hlc3.shift(1), -self.stock_data['volume7'] * 100)
+
+        x_fast = x_trend.ewm(span=fast_x, adjust=False).mean()
+        x_slow = x_trend.ewm(span=slow_x, adjust=False).mean()
+
+        x_kvo = x_fast - x_slow
+        x_trigger = x_kvo.ewm(span=trig_len, adjust=False).mean()
+
+        self.stock_data['KVO7'] = x_kvo
+        self.stock_data['Trigger7'] = x_trigger
+
+        # Buy and Sell signals
+        self.stock_data['klinger7_buy_signal'] = (self.stock_data['KVO7'] > self.stock_data['Trigger7']) & (self.stock_data['KVO7'].shift(1) <= self.stock_data['Trigger7'].shift(1))
+        self.stock_data['klinger7_sell_signal'] = (self.stock_data['KVO7'] < self.stock_data['Trigger7']) & (self.stock_data['KVO7'].shift(1) >= self.stock_data['Trigger7'].shift(1))
 
     def klinger_oscillator(self, fast_period=34, slow_period=55, signal_period=13):
         # Calculate True Range High (TRH) and True Range Low (TRL)
@@ -273,10 +291,10 @@ class Stock:
 
     def plot_stock_data_for_spy(self, specific_date, spy_stock):
         # plt.figure(figsize=(14, 7))
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
 
         ax1.plot(self.stock_data['Close'], label='Close Price', color='blue')
-        ax1.plot(self.stock_data['Moving_Avg_150'], label='Close Price', color='green')
+        ax1.plot(self.stock_data['Moving_Avg_150'], label='Moving_Avg_150', color='green')
         ax1.grid(True)
 
         ax1.set_title(f'{self.ticker} Stock Price, Moving Average')
@@ -292,6 +310,25 @@ class Stock:
         ax2.set_ylabel('Percentage Difference')
         ax2.legend()
         ax2.grid(True)
+
+
+        ax3.plot(self.stock_data.index, self.stock_data['Trigger7'], label='Trigger7', color='purple')
+        ax3.plot(self.stock_data.index, self.stock_data['KVO7'], label='KVO7', color='red')
+        ax3.plot(self.stock_data.index, self.stock_data['Trigger'], label='Trigger', color='green')
+        ax3.plot(self.stock_data.index, self.stock_data['KVO'], label='KVO', color='brown')
+        # ax3.plot(self.stock_data.index, self.stock_data['klinger7_buy_signal'], label='klinger7_buy_signal', color='yellow')
+        # ax3.plot(self.stock_data.index, self.stock_data['klinger7_sell_signal'], label='klinger7_sell_signal', color='olive')
+        # ax3.plot(self.stock_data.index, self.stock_data['klinger_tv_buy_signal'], label='klinger_tv_buy_signal',
+        #          color='green')
+        # ax3.plot(self.stock_data.index, self.stock_data['klinger_tv_sell_signal'], label='klinger_tv_sell_signal',
+        #          color='blue')
+
+        ax3.set_title(f'{self.ticker} kringer')
+        ax3.set_xlabel('Date')
+        ax3.set_ylabel('Percentage Difference')
+        ax3.legend()
+        ax3.grid(True)
+
         plt.tight_layout()
         plt.show(block=True)
         plot_filename = f'../plots/{self.ticker}_stock_plot_{str(specific_date)[:10]}.png'
