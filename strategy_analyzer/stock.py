@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pandas_ta.volume import kvo
 
+from strategy_analyzer.utils import calculate_consecutive_boolean, calculate_consecutive_days
+
 
 class Stock:
     def __init__(self, name: str, ticker: str, stock_data, stock_info=None):
@@ -138,7 +140,23 @@ class Stock:
 
 
     #####################################################
-    def positive_volume_index(self, ma_period=255):
+    # Function to calculate consecutive days
+    def calculate_consecutive_days(self,up_down_series):
+        consecutive_days = []
+        current_streak = 0
+
+        for value in up_down_series:
+            if value == 0:
+                current_streak = 0
+            else:
+                if value == current_streak / abs(current_streak) if current_streak != 0 else value:
+                    current_streak += value
+                else:
+                    current_streak = value
+            consecutive_days.append(abs(current_streak))
+
+        return consecutive_days
+    def positive_volume_index(self, ma_period=100):
         self.stock_data['previous_volume'] = self.stock_data['Volume'].shift(1)
         self.stock_data['previous_close'] = self.stock_data['Close'].shift(1)
         self.stock_data['pvi'] = 1000  # Starting value for PVI
@@ -156,11 +174,12 @@ class Stock:
         self.stock_data['pvi_ma'] = self.stock_data['pvi'].rolling(window=ma_period).mean()
 
         # Generate buy/sell signals
-        self.stock_data['pvi_buy_signal'] = (self.stock_data['pvi'] > self.stock_data['pvi_ma']) & (self.stock_data['pvi'].shift(1) <= self.stock_data['pvi_ma'].shift(1))
-        self.stock_data['pvi_sell_signal'] = (self.stock_data['pvi'] < self.stock_data['pvi_ma']) & (self.stock_data['pvi'].shift(1) >= self.stock_data['pvi_ma'].shift(1))
+        self.stock_data['pvi_buy_signal'] = (self.stock_data['pvi'] > self.stock_data['pvi_ma']) #& (self.stock_data['pvi'].shift(1) <= self.stock_data['pvi_ma'].shift(1))
+        self.stock_data['pvi_sell_signal'] = (self.stock_data['pvi'] < self.stock_data['pvi_ma']) #& (self.stock_data['pvi'].shift(1) >= self.stock_data['pvi_ma'].shift(1))
+        #self.stock_data['up_down'] =self.stock_data['pvi_buy_signal'].apply(lambda x: 1 if x  else (-1 if not self.stock_data['pvi_buy_signal'] else 0))
 
 
-##############################################################
+    ##############################################################
     def klinger_volume_oscillator_tv(self, trig_len=13, fast_x=34, slow_x=55):
         hlc3 = (self.stock_data['High'] + self.stock_data['Low'] + self.stock_data['Close']) / 3
         x_trend = (self.stock_data['Volume'] * 100).where(hlc3 > hlc3.shift(1), -self.stock_data['Volume'] * 100)
@@ -175,8 +194,74 @@ class Stock:
         self.stock_data['Trigger'] = x_trigger
 
         # Buy and Sell signals
-        self.stock_data['klinger_tv_buy_signal'] = (self.stock_data['KVO'] > self.stock_data['Trigger']) & (self.stock_data['KVO'].shift(1) <= self.stock_data['Trigger'].shift(1))
-        self.stock_data['klinger_tv_sell_signal'] = (self.stock_data['KVO'] < self.stock_data['Trigger']) & (self.stock_data['KVO'].shift(1) >= self.stock_data['Trigger'].shift(1))
+        self.stock_data['klinger_tv_buy_signal'] = (self.stock_data['KVO'] > self.stock_data['Trigger']) #& (self.stock_data['KVO'].shift(1) <= self.stock_data['Trigger'].shift(1))
+        self.stock_data['klinger_tv_sell_signal'] = (self.stock_data['KVO'] < self.stock_data['Trigger']) #& (self.stock_data['KVO'].shift(1) >= self.stock_data['Trigger'].shift(1))
+        self.stock_data['klinger_tv_consecutive_buy_daily'] = calculate_consecutive_boolean(self.stock_data['klinger_tv_buy_signal'])
+        self.stock_data['klinger_tv_consecutive_sell_daily'] = calculate_consecutive_boolean(self.stock_data['klinger_tv_sell_signal'])
+
+    def klinger_volume_oscillator_tv_weekly(self, trig_len=13, fast_x=34, slow_x=55):
+        # Resample to weekly data
+        stock_data_weekly = self.stock_data.resample('W-FRI').agg({
+                    'High': 'max',
+                    'Low': 'min',
+                    'Close': 'last',
+                    'Volume': 'sum'
+                })
+
+
+        hlc3 = (stock_data_weekly['High'] + stock_data_weekly['Low'] + stock_data_weekly['Close']) / 3
+        x_trend = (stock_data_weekly['Volume'] * 100).where(hlc3 > hlc3.shift(1), -stock_data_weekly['Volume'] * 100)
+
+        x_fast = x_trend.ewm(span=fast_x, adjust=False).mean()
+        x_slow = x_trend.ewm(span=slow_x, adjust=False).mean()
+
+        x_kvo = x_fast - x_slow
+        x_trigger = x_kvo.ewm(span=trig_len, adjust=False).mean()
+
+        stock_data_weekly['kvo'] = x_kvo
+        stock_data_weekly['trigger'] = x_trigger
+
+        #stock_data_weekly.to_csv ("weekly.csv")
+
+        self.stock_data['KVO_weekly'] = x_kvo.resample('D').interpolate()
+        self.stock_data['Trigger_weekly'] = x_trigger.resample('D').interpolate()
+
+
+        # Buy and Sell signals
+        self.stock_data['klinger_tv_buy_signal_weekly'] = (self.stock_data['KVO_weekly'] > self.stock_data['Trigger_weekly']) #& (self.stock_data['KVO_weekly'].shift(1) <= self.stock_data['Trigger_weekly'].shift(1))
+        self.stock_data['klinger_tv_sell_signal_weekly'] = (self.stock_data['KVO_weekly'] < self.stock_data['Trigger_weekly'])# & (self.stock_data['KVO_weekly'].shift(1) >= self.stock_data['Trigger_weekly'].shift(1))
+
+        self.stock_data['klinger_tv_consecutive_buy_weekly'] = calculate_consecutive_boolean(self.stock_data['klinger_tv_buy_signal_weekly'])
+        self.stock_data['klinger_tv_consecutive_sell_weekly'] = calculate_consecutive_boolean(self.stock_data['klinger_tv_sell_signal_weekly'])
+
+
+    def klinger_volume_oscillator_tv_3days(self, trig_len=13, fast_x=34, slow_x=55):
+        # Resample to weekly data
+        stock_data_weekly = self.stock_data.resample('3D').agg({
+                    'High': 'max',
+                    'Low': 'min',
+                    'Close': 'last',
+                    'Volume': 'sum'
+                })
+        hlc3 = (stock_data_weekly['High'] + stock_data_weekly['Low'] + stock_data_weekly['Close']) / 3
+        x_trend = (stock_data_weekly['Volume'] * 100).where(hlc3 > hlc3.shift(1), -stock_data_weekly['Volume'] * 100)
+
+        x_fast = x_trend.ewm(span=fast_x, adjust=False).mean()
+        x_slow = x_trend.ewm(span=slow_x, adjust=False).mean()
+
+        x_kvo = x_fast - x_slow
+        x_trigger = x_kvo.ewm(span=trig_len, adjust=False).mean()
+
+        self.stock_data['KVO_3days'] = x_kvo.resample('D').bfill()
+        self.stock_data['Trigger_3days'] = x_trigger.resample('D').bfill()
+
+        # Buy and Sell signals
+        self.stock_data['klinger_tv_buy_signal_3days'] = (self.stock_data['KVO_3days'] > self.stock_data['Trigger_3days']) #& (self.stock_data['KVO_weekly'].shift(1) <= self.stock_data['Trigger_weekly'].shift(1))
+        self.stock_data['klinger_tv_sell_signal_3days'] = (self.stock_data['KVO_3days'] < self.stock_data['Trigger_3days'])# & (self.stock_data['KVO_3days'].shift(1) >= self.stock_data['Trigger_3days'].shift(1))
+
+        self.stock_data['klinger_consecutive_buy_3days'] = calculate_consecutive_boolean(self.stock_data['klinger_tv_buy_signal_3days'])
+        self.stock_data['klinger_consecutive_sell_3days'] = calculate_consecutive_boolean(self.stock_data['klinger_tv_sell_signal_3days'])
+
 
     def klinger_volume_oscillator7(self, trig_len=13, fast_x=34, slow_x=55):
         hlc3 = (self.stock_data['high7'] + self.stock_data['low7'] + self.stock_data['close7']) / 3
@@ -192,8 +277,11 @@ class Stock:
         self.stock_data['Trigger7'] = x_trigger
 
         # Buy and Sell signals
-        self.stock_data['klinger7_buy_signal'] = (self.stock_data['KVO7'] > self.stock_data['Trigger7']) & (self.stock_data['KVO7'].shift(1) <= self.stock_data['Trigger7'].shift(1))
-        self.stock_data['klinger7_sell_signal'] = (self.stock_data['KVO7'] < self.stock_data['Trigger7']) & (self.stock_data['KVO7'].shift(1) >= self.stock_data['Trigger7'].shift(1))
+        self.stock_data['klinger7_buy_signal'] = (self.stock_data['KVO7'] > self.stock_data['Trigger7']) #& (self.stock_data['KVO7'].shift(1) <= self.stock_data['Trigger7'].shift(1))
+        self.stock_data['klinger7_sell_signal'] = (self.stock_data['KVO7'] < self.stock_data['Trigger7']) #& (self.stock_data['KVO7'].shift(1) >= self.stock_data['Trigger7'].shift(1))
+
+        self.stock_data['klinger7_consecutive_buy'] = calculate_consecutive_boolean(self.stock_data['klinger7_buy_signal'])
+        self.stock_data['klinger7_consecutive_sell'] = calculate_consecutive_boolean(self.stock_data['klinger7_sell_signal'])
 
     def klinger_oscillator(self, fast_period=34, slow_period=55, signal_period=13):
         # Calculate True Range High (TRH) and True Range Low (TRL)
@@ -217,10 +305,19 @@ class Stock:
         # Calculate Signal Line (EMA of KO)
         self.stock_data['signal'] = self.stock_data['ko'].ewm(span=signal_period, adjust=False).mean()
 
-        # Generate buy/sell signals
-        self.stock_data['klinger_buy_signal'] = (self.stock_data['ko'] > self.stock_data['signal']) & (self.stock_data['ko'].shift(1) <= self.stock_data['signal'].shift(1))
-        self.stock_data['klinger_sell_signal'] = (self.stock_data['ko'] < self.stock_data['signal']) & (self.stock_data['ko'].shift(1) >= self.stock_data['signal'].shift(1))
 
+        # Generate buy/sell signals
+        self.stock_data['klinger_buy_signal'] = (self.stock_data['ko'] > self.stock_data['signal']) #& (self.stock_data['ko'].shift(1) <= self.stock_data['signal'].shift(1))
+        self.stock_data['klinger_sell_signal'] = (self.stock_data['ko'] < self.stock_data['signal']) #& (self.stock_data['ko'].shift(1) >= self.stock_data['signal'].shift(1))
+
+        self.stock_data['klinger_consecutive_buy_days'] = calculate_consecutive_boolean(self.stock_data['klinger_buy_signal'])
+        self.stock_data['klinger_consecutive_sell_days'] = calculate_consecutive_boolean(self.stock_data['klinger_sell_signal'])
+
+        # pd.set_option('display.max_columns', None)  # Show all columns
+        # pd.set_option('display.width', 1000)
+        # pd.reset_option('display.max_rows')
+        # columns_to_print = ['klinger_buy_signal', 'klinger_consecutive_buy_days', 'klinger_sell_signal','klinger_consecutive_sell_days' ]
+        # print(self.stock_data[columns_to_print])
 
     ###################################
 
@@ -312,8 +409,8 @@ class Stock:
         ax2.grid(True)
 
 
-        ax3.plot(self.stock_data.index, self.stock_data['Trigger7'], label='Trigger7', color='purple')
-        ax3.plot(self.stock_data.index, self.stock_data['KVO7'], label='KVO7', color='red')
+        # ax3.plot(self.stock_data.index, self.stock_data['Trigger7'], label='Trigger7', color='purple')
+        # ax3.plot(self.stock_data.index, self.stock_data['KVO7'], label='KVO7', color='red')
         ax3.plot(self.stock_data.index, self.stock_data['Trigger'], label='Trigger', color='green')
         ax3.plot(self.stock_data.index, self.stock_data['KVO'], label='KVO', color='brown')
         # ax3.plot(self.stock_data.index, self.stock_data['klinger7_buy_signal'], label='klinger7_buy_signal', color='yellow')

@@ -1,4 +1,4 @@
-Symbol,Name,Last Sale,Net Change,% Change,Market Cap,Country,IPO Year,Volume,Sector,Industry
+Symbol,Name,LastSale,NetChange,Change,MarketCap,Country,IPOYear,Volume,Sector,Industry
 A,Agilent Technologies Inc. Common Stock,$153.67,-0.97,-0.627%,45033805492.00,United States,1999,997114,Industrials,Biotechnology: Laboratory Analytical Instruments
 AA,Alcoa Corporation Common Stock ,$44.09,1.56,3.668%,7916786644.00,United States,2016,9389641,Industrials,Aluminum
 AACG,ATA Creativity Global American Depositary Shares,$0.9501,0.0401,4.407%,30403324.00,China,2008,28458,Real Estate,Other Consumer Services
@@ -1046,8 +1046,6 @@ BREZW,Breeze Holdings Acquisition Corp. Warrant,$0.6201,-0.2298,-27.038%,0.00,Un
 BRFH,Barfresh Food Group Inc. Common Stock,$1.50,-0.06,-3.846%,22079813.00,United States,,31992,Consumer Staples,Packaged Foods
 BRFS,BRF S.A.,$3.84,-0.03,-0.775%,6446039297.00,Brazil,,1526554,Consumer Staples,Meat/Poultry/Fish
 BRID,Bridgford Foods Corporation Common Stock,$10.3737,-0.0963,-0.92%,94160332.00,United States,,1595,Consumer Staples,Specialty Foods
-BRK/A,Berkshire Hathaway Inc.,$625150.00,1900.00,0.305%,919516881100.00,United States,,11912,,
-BRK/B,Berkshire Hathaway Inc.,$414.37,1.37,0.332%,914229242801.00,United States,,2731894,,
 BRKH,BurTech Acquisition Corp. Class A Common Stock,$11.0801,-0.0499,-0.448%,0.00,United States,2022,1293,Finance,Blank Checks
 BRKHW,BurTech Acquisition Corp. Warrants,$0.2699,-0.0001,-0.037%,0.00,United States,2022,77954,Finance,Blank Checks
 BRKL,Brookline Bancorp Inc. Common Stock,$8.98,0.04,0.447%,798273301.00,United States,,271162,Finance,Savings Institutions

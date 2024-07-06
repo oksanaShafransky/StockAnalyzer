@@ -18,6 +18,14 @@ from email.mime.base import MIMEBase
 from email import encoders
 import os
 #from yahoo_fin import stock_info as si
+from strategy_analyzer.utils import calculate_consecutive_days, calculate_consecutive_days2
+
+# Adjust pandas display options to show all rows
+pd.set_option('display.max_rows', 100)  # Set the max number of rows to display
+pd.set_option('display.max_columns', None)  # Show all columns
+pd.set_option('display.width', 1000)  # Set the width to avoid wrapping
+pd.set_option('display.colheader_justify', 'left')  # Left align column headers
+
 
 class StockManager:
     def __init__(self):
@@ -186,6 +194,19 @@ class StockManager:
                 sma150_volume = stock.stock_data.loc[str(current_date), 'SMA_Volume150']
                 std150_volume = stock.stock_data.loc[str(current_date), 'STD_Volume150']
 
+                stock.stock_data['volume_change_prct'] = (stock.stock_data['Volume'] - stock.stock_data['Volume'].shift(1)) / stock.stock_data['Volume'].shift(1) * 100
+                stock.stock_data['consecutive_volume_change_prct'] = calculate_consecutive_days2(stock.stock_data['volume_change_prct'])
+                consecutive_volume_change_prct = stock.stock_data['consecutive_volume_change_prct'].iloc[-1]
+
+                stock.stock_data['consecutive_volume_days'] = calculate_consecutive_days(stock.stock_data['Volume'], stock.stock_data['SMA_Volume150'])
+                consecutive_volume_days = stock.stock_data['consecutive_volume_days'].iloc[-1]
+
+                stock.stock_data['close_price_prct'] = (stock.stock_data['Close'] - stock.stock_data['Close'].shift(1)) / stock.stock_data['Close'].shift(1) * 100
+                stock.stock_data['consecutive_up_days_prct'] = calculate_consecutive_days2(stock.stock_data['close_price_prct'])
+                consecutive_up_days_prct = stock.stock_data['consecutive_up_days_prct'].iloc[-1]
+                stock.stock_data['consecutive_up_days_above_sma150'] = calculate_consecutive_days(stock.stock_data['Close'], stock.stock_data['Moving_Avg_150'])
+                consecutive_up_days_above_sma150 = stock.stock_data['consecutive_up_days_above_sma150'].iloc[-1]
+
                 stock.calculate_rsi()
                 stock.compute_cmf()
                 stock.compute_cci()
@@ -193,10 +214,13 @@ class StockManager:
                 stock.klinger_oscillator()
                 stock.klinger_volume_oscillator7()
                 stock.klinger_volume_oscillator_tv()
+                stock.klinger_volume_oscillator_tv_weekly()
+                stock.klinger_volume_oscillator_tv_3days()
                 rsi = stock.stock_data.loc[str(current_date), 'RSI'].round(2)
                 cmf = stock.stock_data.loc[str(current_date), 'CMF'].round(2)
                 cci = stock.stock_data.loc[str(current_date), 'CCI'].round(2)
                 avg_maxima, median_maxima = stock.calculate_maxima_statistics()
+
                 avg_maxima_perc = (((avg_maxima - close_price) / avg_maxima) * 100).round(3)
                 median_maxima_perc = (((median_maxima - close_price) / median_maxima) * 100).round(3)
                 stock.stock_data['Normalized_Close'] = self.rolling_normalize_to_base(stock.stock_data['Close'], 150)
@@ -209,6 +233,16 @@ class StockManager:
 
                 klinger_sell = stock.stock_data['klinger_sell_signal'].iloc[-1]
                 klinger_buy = stock.stock_data['klinger_buy_signal'].iloc[-1]
+
+                klinger_tv_consecutive_buy_daily = stock.stock_data['klinger_tv_consecutive_buy_daily'].iloc[-1]
+                klinger_tv_consecutive_sell_daily = stock.stock_data['klinger_tv_consecutive_sell_daily'].iloc[-1]
+
+                klinger_consecutive_buy_3days = stock.stock_data['klinger_consecutive_buy_3days'].iloc[-1]
+                klinger_consecutive_sell_3days = stock.stock_data['klinger_consecutive_sell_3days'].iloc[-1]
+
+                klinger_tv_consecutive_sell_weekly = stock.stock_data['klinger_tv_consecutive_sell_weekly'].iloc[-1]
+                klinger_tv_consecutive_buy_weekly = stock.stock_data['klinger_tv_consecutive_buy_weekly'].iloc[-1]
+
                 klinger7_signal = stock.stock_data.loc[str(current_date), 'Trigger7'].round(2)
                 klinger7_kvo = stock.stock_data.loc[str(current_date), 'KVO7'].round(2)
                 klinger7_sell = stock.stock_data['klinger7_sell_signal'].iloc[-1]
@@ -217,6 +251,10 @@ class StockManager:
                 klinger_tv_kvo = stock.stock_data.loc[str(current_date), 'KVO'].round(2)
                 klinger_tv_sell = stock.stock_data['klinger_tv_sell_signal'].iloc[-1]
                 klinger_tv_buy = stock.stock_data['klinger_tv_buy_signal'].iloc[-1]
+                klinger_tv_sell_weekly = stock.stock_data['klinger_tv_sell_signal_weekly'].iloc[-1]
+                klinger_tv_buy_weekly = stock.stock_data['klinger_tv_buy_signal_weekly'].iloc[-1]
+                klinger_tv_sell_3days = stock.stock_data['klinger_tv_sell_signal_3days'].iloc[-1]
+                klinger_tv_buy_3days = stock.stock_data['klinger_tv_buy_signal_3days'].iloc[-1]
                 pvi_sell = stock.stock_data['pvi_sell_signal'].iloc[-1]
                 pvi_buy = stock.stock_data['pvi_buy_signal'].iloc[-1]
 
@@ -247,14 +285,32 @@ class StockManager:
 
                     # attachments.append(plot_filename)
                     link = f'https://finance.yahoo.com/quote/{stock.ticker}'
+                    beta = stock.stock_info.get('beta', "")
+                    recommendationKey = stock.stock_info.get('recommendationKey', "")
                     summary_table_data.append(
-                        [stock.ticker, stock.name, close_price, price_change_pct, sma150_price, volume, volume_change_pct, sma150_volume, std150_volume, distance_percentage,
-                         normalized_close_vs_spy, klinger_sell, klinger_buy,
-                         klinger_tv_signal, klinger_tv_kvo, klinger_tv_sell, klinger_tv_buy,
-                         klinger7_signal, klinger7_kvo, klinger7_sell, klinger7_buy,
-                         pvi_sell, pvi_buy, avg_maxima_perc, median_maxima_perc, rsi, cmf, cci, sma50_price, sma20_price, sma7_price,
-                         stock.stock_info['beta'], stock.stock_info['recommendationKey'],
+                        [stock.ticker, stock.name, close_price, price_change_pct, consecutive_up_days_prct,
+                         sma150_price,consecutive_up_days_above_sma150,
+                         volume, volume_change_pct, sma150_volume, consecutive_volume_days, consecutive_volume_change_prct,
+                         distance_percentage, normalized_close_vs_spy,
+                         klinger_tv_sell, klinger_tv_buy,
+                         klinger_tv_sell_3days, klinger_tv_buy_3days,
+                         klinger_tv_sell_weekly, klinger_tv_buy_weekly,
+                         klinger_tv_consecutive_sell_daily, klinger_tv_consecutive_buy_daily,
+
+                         pvi_sell, pvi_buy, avg_maxima_perc, median_maxima_perc,
+                         rsi, cmf, cci, sma50_price, sma20_price, sma7_price,
+                         beta, recommendationKey,
                          stock.stock_info['numberOfAnalystOpinions'], link])
+
+
+
+
+                    short_list_columns = ['ticker', 'name', 'previous_close', 'close_price', 'price_change_pct',
+                                          'prev_sma150_price',
+                                          'sma150_price', 'volume', 'volume_change_pct', 'sma150_volume',
+                                          'std150_volume']
+
+
                     watch_list_table.append(
                         [f'{stock.ticker}', '441.58', '2024/06/13', '16:00 EDT', '0.519989', '440.78', '443.39',
                          '439.37', '15858484', '', '', '', '', '', '', ''])
@@ -264,12 +320,7 @@ class StockManager:
                 print(f'Failed get data for ticker {ticker}: {e}')
                 continue
 
-    def get_all_trend_changers_tickers(self, ticker_names:[], start_date, end_date, to_email, top_stocks=1000)->[]:
-        portfolio_df = df = pd.read_csv('../portfolio/portfolio_dash.csv')
-
-        if not ticker_names:
-            ticker_names = pd.read_csv('../profits/top_1000_nasdaq_tickers.csv')['Symbol'][:top_stocks]
-
+    def get_all_trend_changers_tickers(self, ticker_names:[], title, start_date, end_date, to_email, top_stocks=1000)->[]:
         spy_stock = self.get_SPY_close(start_date, end_date)
 
         attachments = []
@@ -288,17 +339,22 @@ class StockManager:
              'High', 'Low', 'Volume', 'Trade Date',
              'Purchase Price', 'Quantity', 'Commission', 'High Limit',
              'Low Limit', 'Comment']
-            summary_columns = ['Ticker', 'Name', 'Current Price', 'price_change_pct', 'sma150_price', 'Volume', 'volume_change_pct', 'sma150_volume',
-             'std150_volume', 'distance_percentage', 'vs_spy', 'klinger_sell_signal', 'klinger_buy_signal',
-                               'kelinger_tv_signal','kelinger_tv_ko','kelinger_tv_buy_signal','kelinger_tv_buy_signal',
-                               'kelinger7_signal', 'kelinger7_ko', 'kelinger7_buy_signal','kelinger7_buy_signal',
-                               'pvi_sell_signal','pvi_sell_signal','avg_maxima_perc', 'median_maxima_perc',
-                               'rsi', 'cmf', 'cci', 'sma50_price', 'sma20_price', 'sma7_price', 'beta', 'recommendationKey', 'numberOfAnalystOpinions', 'Link']
+            summary_columns = ['Ticker', 'Name', 'Current Price', 'price_change_pct', 'consecutive_up_days_prct',
+                    'sma150_price', 'consecutive_days_above_sma150',
+                     'Volume', 'volume_change_pct', 'sma150_volume', 'consecutive_volume_days_above_sma150', 'consecutive_volume_change_prct',
+                     'distance_percentage', 'vs_spy',
+                     'kelinger_tv_sell_signal', 'kelinger_tv_buy_signal',
+                     'kelinger_tv_sell_signal_sell_3days', 'kelinger_tv_buy_signal_buy_3days',
+                     'kelinger_tv_sell_signal_sell_weekly', 'kelinger_tv_buy_signal_buy_weekly',
+                     'klinger_tv_consecutive_sell_daily', 'klinger_tv_consecutive_buy_daily',
+
+                     'pvi_sell_signal', 'pvi_buy_signal', 'avg_maxima_perc', 'median_maxima_perc',
+                     'rsi', 'cmf', 'cci', 'sma50_price', 'sma20_price', 'sma7_price', 'beta', 'recommendationKey',
+                     'numberOfAnalystOpinions', 'Link']
             short_list_columns = ['ticker', 'name', 'previous_close', 'close_price', 'price_change_pct','prev_sma150_price',
                                   'sma150_price', 'volume', 'volume_change_pct', 'sma150_volume', 'std150_volume']
 
             summary_table_last_day_df = pd.DataFrame(summary_table_data_last_day, columns=summary_columns).sort_values(by='rsi')
-
 
             self.save_chunks(pd.DataFrame(watch_list_table, columns=watch_list_columns), file_name=f'watch_list_table_{end_date.date()}', attachments=attachments)
 
@@ -335,9 +391,8 @@ class StockManager:
 
             #summary_table = summary_table_df.to_string(index=False)
             if attachments:
-                subject = f'Stock Change Notifications for {end_date}'
                 body = f'Trend change detected on {end_date}. Please find the attached plots for more details.'
-                self.send_email(subject, body, to_email, attachments, summary_table_last_day_df)
+                self.send_email(title, body, to_email, attachments, summary_table_last_day_df)
             else:
                 print(f'No significant trend changes on {end_date} for any stocks.')
 
