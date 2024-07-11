@@ -89,9 +89,19 @@ if __name__ == "__main__":
     to_email = ['vladiks@gmail.com', 'oksi78@yahoo.com', 'oksi.shafransky@gmail.com']
     portfolio_df = pd.read_csv('../portfolio/portfolio_dash.csv')
     #portfolio_df = None
-    tickers = portfolio_df['Ticker'].tolist() if portfolio_df is not None else None
+    portfolio_tickers = portfolio_df['Ticker'].tolist() if portfolio_df is not None else None
     faang_tickers = ['AAPL','NVDA','META','GOOG','AMZN']
-    subject = f'Portfolio Notifications for {end_date}' if tickers else f'Stock Change Notifications for {end_date}'
+
+    ###############SELECT REPORT MODE - PORTFOLIO OR ALL###############
+    RUN_FOR_PORTFOLIO = True
+    ###############################
+    if RUN_FOR_PORTFOLIO:
+        ticker_list = portfolio_tickers
+        subject = f'Portfolio Notifications for {end_date}'
+    else:
+        ticker_list = top_companies_list
+        subject = f'Stock Change Notifications for {end_date}'
+
 
     stock_manager = StockManager()
     # stocks_default = stock_manager.get_stocks_by_tickers(None, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), load_from_disk=False, top_stocks=1000)
@@ -110,7 +120,7 @@ if __name__ == "__main__":
     #sma_strategy_default = SMAStrategy()
     #stock_manager.run_process_for_strategy_tickers(None, sma_strategy_default, '../profits/profits_for_sma.csv', start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), load_from_disk=False, top_stocks=1000)
     #stock_manager.get_all_trend_changers_tickers(['AMZN'], subject, start_date, end_date, to_email)
-    stock_manager.get_all_trend_changers_tickers(top_companies_list, subject, start_date, end_date, to_email, top_stocks=top_stocks)
+    stock_manager.get_all_trend_changers_tickers(ticker_list, subject, start_date, end_date, to_email, top_stocks=top_stocks)
 
 
     #stock_manager.send_mail_with_trend_change_signals(stocks_default, '2024-05-28', to_email)

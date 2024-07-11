@@ -155,7 +155,10 @@ class StockManager:
                 stock = yf.Ticker(ticker)
                 #stock_data = stock.history(start=start_date, end=end_date)
                 #stock = yf.download(ticker, period=f'{345}d', interval='1d')
-                stock_data = stock.history(period='2y', interval='1d')
+                try:
+                    stock_data = stock.history(period='2y', interval='1d')
+                except Exception as e:
+                    stock_data = stock.history(period='max', interval='1d')
                 stock_data.reset_index(inplace=True)
                 stock_info = stock.info
 
@@ -378,7 +381,7 @@ class StockManager:
 
 
             if unusual_volume:
-                unusual_volume_df = pd.DataFrame(removed_stocks, columns=short_list_columns)
+                unusual_volume_df = pd.DataFrame(unusual_volume, columns=short_list_columns)
                 unusual_volume_file_name = f'../summary_tables/unusual_volume_{end_date.date()}.csv'
                 unusual_volume_df.to_csv(unusual_volume_file_name, index=False)
                 attachments.append(unusual_volume_file_name)
