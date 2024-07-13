@@ -7,7 +7,7 @@ if __name__ == "__main__":
     end_date = datetime.datetime.now()
     start_date = end_date - datetime.timedelta(days=5*365)
     to_email = ['vladiks@gmail.com', 'oksi78@yahoo.com', 'oksi.shafransky@gmail.com']
-    tickers = ['AAPL','ABNB','AEG','SEDG',]
+    tickers = ['MSFT','NVDA']
     stock_manager = StockManager()
     stocks_default = stock_manager.get_stocks_by_ticker(tickers, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
     stocks_for_strategy_130 = stocks_default
